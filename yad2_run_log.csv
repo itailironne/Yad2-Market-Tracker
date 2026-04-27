@@ -1,0 +1,17 @@
+﻿timestamp,status,pages_scraped,total_listings,new_listings,removed_listings,price_cuts,price_rises,avg_cut_pct,avg_price,median_price,min_price,max_price,avg_price_per_sqm,absorption_rate,survival_30d,avg_dom,error
+2026-04-24 21:35,success,17,534,469,468,0,0,0,3436515,3490000,2350000,8000000,32073,87.8,,0.0,
+2026-04-24 21:41,success,17,533,412,413,0,0,0,3460210,3490000,2350000,8000000,30935,77.34,,0.0,
+2026-04-24 21:47,success,17,528,420,425,0,0,0,3448536,3490000,2350000,8000000,31573,79.74,,0.0,
+2026-04-24 23:37,error,,,,,,,,,,,,,,,,[Errno 28] No space left on device
+2026-04-25 07:07,error,,,,,,,,,,,,,,,,Expecting value: line 1 column 1 (char 0)
+2026-04-25 07:32,error,,,,,,,,,,,,,,,,[Errno 28] No space left on device
+2026-04-25 07:39,success,5,163,143,508,0,0,0,3444519,3490000,2449000,5500000,28929,96.21,,1.0,
+2026-04-25 07:46,success,17,531,472,104,0,0,0,3446700,3490000,2350000,8000000,30517,63.8,,0.1,
+2026-04-25 07:49,success,17,532,158,157,0,0,0,3464027,3490000,2350000,8000000,30588,29.57,,0.0,
+2026-04-25 07:56,error,,,,,,,,,,,,,,,,list index out of range
+2026-04-26 08:04,error,,,,,,,,,,,,,,,,cannot access local variable 'first_seen' where it is not associated with a value
+2026-04-26 20:03,error,,,,,,,,,,,,,,,,cannot access local variable 'first_seen' where it is not associated with a value
+2026-04-26 20:13,error,,,,,,,,,,,,,,,,cannot access local variable 'first_seen' where it is not associated with a value
+2026-04-26 20:17,error,,,,,,,,,,,,,,,,cannot access local variable 'today' where it is not associated with a value
+2026-04-26 20:17,success,17,535,489,486,0,0,0,3456422,3490000,2350000,8000000,30723,91.35,,1.0,
+2026-04-26 21:29,success,17,535,494,494,0,0,0,3463132,3490000,2350000,8000000,30904,92.34,,0.1,
