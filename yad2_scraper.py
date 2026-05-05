@@ -84,8 +84,58 @@ def extract_dates_from_json(obj, result, depth=0):
             extract_dates_from_json(item, result, depth + 1)
 
 def extract_neighborhood(info):
+    """yad2 includes the neighborhood as the 2nd comma-part for most listings:
+        "דירה, נווה זמר, רעננה" → "נווה זמר"
+    Some cards omit it ("דירה, רעננה") — those return "" here, and then get a
+    chance to be enriched via the street→neighborhood lookup built per-run."""
     parts = str(info).split(",")
-    return parts[1].strip() if len(parts) > 1 else ""
+    if len(parts) >= 3:
+        return parts[1].strip()
+    return ""
+
+
+def enrich_missing_neighborhoods(listings):
+    """yad2 omits the neighborhood from ~25% of listing cards (info reads
+    "דירה, רעננה" with no neighborhood between them). The same street usually
+    appears in OTHER listings that DO carry the neighborhood, so we build a
+    street→neighborhood lookup from the tagged listings in this run and use it
+    to infer the missing neighborhood for the untagged ones.
+
+    Only enriches when a street maps to a single neighborhood across the run
+    (avoids guessing on the rare cross-neighborhood streets).
+
+    Mutates each enriched listing's `info` from "דירה, רעננה" to
+    "דירה, <neighborhood>, רעננה" so downstream dashboards/aggregations pick
+    it up with no further changes. Returns (enriched_count, ambiguous_streets).
+    """
+    from collections import Counter, defaultdict
+    street_to_nbs = defaultdict(Counter)
+    for r in listings:
+        parts = str(r.get("info", "")).split(",")
+        if len(parts) >= 3:
+            nb = parts[1].strip()
+            street = (r.get("street") or "").strip()
+            if street and nb and street != "דירה":
+                street_to_nbs[street][nb] += 1
+    consistent = {s: list(nbs)[0] for s, nbs in street_to_nbs.items() if len(nbs) == 1}
+    ambiguous  = {s for s, nbs in street_to_nbs.items() if len(nbs) > 1}
+
+    enriched = 0
+    for r in listings:
+        info = str(r.get("info", ""))
+        parts = info.split(",")
+        if len(parts) >= 3:
+            continue  # already has a neighborhood
+        street = (r.get("street") or "").strip()
+        nb = consistent.get(street)
+        if not nb:
+            continue
+        # Rebuild as "<type>, <nb>, <city>"
+        apt_type = parts[0].strip() if parts else "דירה"
+        city     = parts[1].strip() if len(parts) >= 2 else "רעננה"
+        r["info"] = f"{apt_type}, {nb}, {city}"
+        enriched += 1
+    return enriched, ambiguous
 
 def ensure_csv_columns(path, expected_cols):
     """If `path` exists and is missing any of `expected_cols`, append the missing columns
@@ -251,6 +301,13 @@ async def run():
         if len(deduped) != len(listings):
             print(f"Deduplicated: {len(listings)} -> {len(deduped)} ({len(listings) - len(deduped)} booster duplicates removed)")
         listings = deduped
+
+        # Backfill missing neighborhoods using a street→neighborhood lookup built
+        # from listings whose card text DID include a neighborhood.
+        enriched, ambiguous = enrich_missing_neighborhoods(listings)
+        if enriched:
+            print(f"Neighborhood enrichment: filled {enriched} listings via street lookup"
+                  + (f" ({len(ambiguous)} ambiguous streets skipped)" if ambiguous else ""))
 
         # ── Merge fiber-intercepted dates with persistent cache ───────────────
         try:
