@@ -1063,7 +1063,7 @@ else:
         rem_by_date = pd.Series(dtype=int)
 
     with gc7:
-        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות נראו לראשונה ביום נתון. מקור: yad2_first_seen.json. ספירה לפי מזהה מודעה (לא URL מלא), כך שכפילויות booster לא נספרות.">ⓘ</span>מודעות חדשות שנוספו</div><div class="card-desc">לפי יום · ייחודיות בלבד</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות נראו לראשונה ביום נתון. מקור: yad2_first_seen.json. ספירה לפי מזהה מודעה (לא URL מלא), כך שכפילויות booster לא נספרות. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות חדשות שנוספו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
         if len(new_by_date):
             fig_new = go.Figure(go.Bar(
                 x=new_by_date.index, y=new_by_date.values,
@@ -1077,13 +1077,19 @@ else:
             _chart(fig_new, 280)
             fig_new.update_layout(yaxis_title="מודעות", bargap=0.3,
                                   xaxis=dict(type="category", fixedrange=True))
-            st.plotly_chart(fig_new, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
+            new_event = st.plotly_chart(
+                fig_new, use_container_width=True,
+                config=dict(displayModeBar=False, scrollZoom=False),
+                on_select="rerun", key="chart_new_listings",
+                selection_mode="points",
+            )
         else:
+            new_event = None
             st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני first_seen.</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with gc8:
-        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות הוסרו מהשוק ביום נתון (נמכרו או הוסרו). מקור: yad2_dom_log.csv, מנוקה מכפילויות booster.">ⓘ</span>מודעות שהוסרו</div><div class="card-desc">לפי יום · ייחודיות בלבד</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות הוסרו מהשוק ביום נתון (נמכרו או הוסרו). מקור: yad2_dom_log.csv, מנוקה מכפילויות booster. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות שהוסרו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
         if len(rem_by_date):
             fig_rem = go.Figure(go.Bar(
                 x=rem_by_date.index, y=rem_by_date.values,
@@ -1097,10 +1103,102 @@ else:
             _chart(fig_rem, 280)
             fig_rem.update_layout(yaxis_title="מודעות", bargap=0.3,
                                   xaxis=dict(type="category", fixedrange=True))
-            st.plotly_chart(fig_rem, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
+            rem_event = st.plotly_chart(
+                fig_rem, use_container_width=True,
+                config=dict(displayModeBar=False, scrollZoom=False),
+                on_select="rerun", key="chart_removed_listings",
+                selection_mode="points",
+            )
         else:
+            rem_event = None
             st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני dom_log.</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Drill-down: clicking a bar above shows the listings for that day ─────
+    def _click_date(event):
+        try:
+            pts = event.selection.points if event else []
+            return str(pts[0]["x"]) if pts else None
+        except Exception:
+            return None
+
+    new_click_date = _click_date(new_event)
+    rem_click_date = _click_date(rem_event)
+
+    if new_click_date or rem_click_date:
+        st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
+        fs_map = load_first_seen_map()
+        dom_full = load_dom_log()
+
+        # Build URL → details from current df + dom_log so we can show real fields
+        details_by_lid = {}
+        for _, r in df.iterrows():
+            u = r.get("url") or ""
+            if not u: continue
+            li = _lid(u)
+            details_by_lid[li] = {
+                "מחיר": r.get("price", ""),
+                "שכונה": r.get("neighborhood", "") or (str(r.get("info","")).split(",")[1].strip()
+                                                       if len(str(r.get("info","")).split(",")) >= 3 else ""),
+                "סוג": r.get("apt_type", ""),
+                "חדרים": r.get("rooms", ""),
+                "קומה": r.get("floor", ""),
+                'מ"ר': r.get("size_sqm", ""),
+                "קישור": u,
+                "סטטוס": "פעיל",
+            }
+        if not dom_full.empty:
+            for _, r in dom_full.iterrows():
+                u = r.get("url") or ""
+                li = _lid(u)
+                if not li or li in details_by_lid: continue
+                details_by_lid[li] = {
+                    "מחיר": r.get("price", ""),
+                    "שכונה": r.get("neighborhood", ""),
+                    "סוג": r.get("apt_type", ""),
+                    "חדרים": "",
+                    "קומה": "",
+                    'מ"ר': r.get("size_sqm", ""),
+                    "קישור": u,
+                    "סטטוס": "הוסר",
+                }
+
+        if new_click_date:
+            ids_for_date = [_lid(k) for k, d in fs_map.items() if d == new_click_date]
+            rows = [details_by_lid[li] for li in ids_for_date if li in details_by_lid]
+            st.markdown(f'<div class="section-title">דירות שנוספו ב־{new_click_date} ({len(rows)})</div>',
+                        unsafe_allow_html=True)
+            if rows:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            else:
+                st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
+
+        if rem_click_date and not dom_full.empty:
+            dom_for_date = dom_full.copy()
+            dom_for_date["_lid"] = dom_for_date["url"].astype(str).apply(_lid)
+            dom_for_date = dom_for_date[dom_for_date["_lid"] != ""]
+            dom_for_date = dom_for_date.drop_duplicates(subset=["_lid", "removed_date"])
+            active_ids_now = {_lid(u) for u in df["url"] if u}
+            dom_for_date = dom_for_date[~dom_for_date["_lid"].isin(active_ids_now)]
+            dom_for_date = dom_for_date.sort_values("removed_date").drop_duplicates(subset=["_lid"], keep="last")
+            dom_for_date = dom_for_date[dom_for_date["removed_date"] == rem_click_date]
+            rem_rows = []
+            for _, r in dom_for_date.iterrows():
+                rem_rows.append({
+                    "מחיר": r.get("price", ""),
+                    "שכונה": r.get("neighborhood", ""),
+                    "סוג": r.get("apt_type", ""),
+                    'מ"ר': r.get("size_sqm", ""),
+                    "ימים בשוק": r.get("dom_days", ""),
+                    "נראה לראשונה": r.get("first_seen", ""),
+                    "קישור": r.get("url", ""),
+                })
+            st.markdown(f'<div class="section-title">דירות שהוסרו ב־{rem_click_date} ({len(rem_rows)})</div>',
+                        unsafe_allow_html=True)
+            if rem_rows:
+                st.dataframe(pd.DataFrame(rem_rows), use_container_width=True, hide_index=True)
+            else:
+                st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
 
 # ── Section: Changes ─────────────────────────────────────────────────────────────
 st.markdown('<div class="section-title" style="margin-top:18px">מה השתנה מאז העדכון הקודם</div>', unsafe_allow_html=True)
