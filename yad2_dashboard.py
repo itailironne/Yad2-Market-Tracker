@@ -1138,9 +1138,13 @@ else:
         fs_map = load_first_seen_map()
         dom_full = load_dom_log()
 
-        # Build URL → details from current df + dom_log so we can show real fields
+        # Build details ONLY from the filtered active listings (fdf) so the
+        # drill-down respects the filter bar above. Removed listings come from
+        # dom_log filtered by neighborhood/type/price/size where those columns
+        # exist in dom_log; rooms/floor aren't tracked there so those filters
+        # only apply to active listings.
         details_by_lid = {}
-        for _, r in df.iterrows():
+        for _, r in fdf.iterrows():
             u = r.get("url") or ""
             if not u: continue
             li = _lid(u)
@@ -1156,7 +1160,20 @@ else:
                 "סטטוס": "פעיל",
             }
         if not dom_full.empty:
-            for _, r in dom_full.iterrows():
+            dom_filtered = dom_full.copy()
+            # Apply the filter-bar selections to dom_log rows where the
+            # corresponding columns exist.
+            if sel_nb != "הכל" and "neighborhood" in dom_filtered.columns:
+                dom_filtered = dom_filtered[dom_filtered["neighborhood"] == sel_nb]
+            if sel_type != "הכל" and "apt_type" in dom_filtered.columns:
+                dom_filtered = dom_filtered[dom_filtered["apt_type"] == sel_type]
+            if "price" in dom_filtered.columns:
+                dom_pn = dom_filtered["price"].astype(str).apply(parse_price_num)
+                dom_filtered = dom_filtered[dom_pn.between(price_range[0], price_range[1]) | dom_pn.isna()]
+            if "size_sqm" in dom_filtered.columns:
+                dom_sz = pd.to_numeric(dom_filtered["size_sqm"], errors="coerce").fillna(size_range[0])
+                dom_filtered = dom_filtered[dom_sz.between(size_range[0], size_range[1])]
+            for _, r in dom_filtered.iterrows():
                 u = r.get("url") or ""
                 li = _lid(u)
                 if not li or li in details_by_lid: continue
@@ -1182,7 +1199,10 @@ else:
                 st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
 
         if rem_click_date and not dom_full.empty:
-            dom_for_date = dom_full.copy()
+            # Start from the already-filtered dom rows so the drill-down honors
+            # the filter bar. active_ids_now is global (any current listing
+            # blocks it from being a "real removal") regardless of filters.
+            dom_for_date = dom_filtered.copy()
             dom_for_date["_lid"] = dom_for_date["url"].astype(str).apply(_lid)
             dom_for_date = dom_for_date[dom_for_date["_lid"] != ""]
             dom_for_date = dom_for_date.drop_duplicates(subset=["_lid", "removed_date"])
