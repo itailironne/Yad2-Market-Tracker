@@ -21,19 +21,34 @@ def parse_price_num(p):
     m = re.search(r"(\d+)", p)
     return int(m.group(1)) if m else None
 
+def shift_saturday_to_friday(date_str):
+    """If date_str (YYYY-MM-DD) falls on Saturday, return the previous Friday instead."""
+    if not date_str:
+        return date_str
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        if dt.weekday() == 5:  # 5 = Saturday
+            return (dt - timedelta(days=1)).strftime("%Y-%m-%d")
+        return date_str
+    except Exception:
+        return date_str
+
 def parse_yad2_date(text):
     m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{2,4})", str(text))
     if not m: return ""
     d, mo, y = m.groups()
     if len(y) == 2: y = "20" + y
     try:
-        return datetime.strptime(f"{d}/{mo}/{y}", "%d/%m/%Y").strftime("%Y-%m-%d")
+        result = datetime.strptime(f"{d}/{mo}/{y}", "%d/%m/%Y").strftime("%Y-%m-%d")
+        return shift_saturday_to_friday(result)
     except:
         return ""
 
 def extract_id_from_url(url):
-    """Extract listing ID from a Yad2 URL like .../item/ABC123"""
-    clean = url.split("?")[0].rstrip("/")
+    """Extract listing ID from a Yad2 URL like .../item/ABC123.
+    Same listing keeps a stable ID across runs even though yad2 randomizes the
+    query string (?pagination=…&spot=…&location=…) on every page load."""
+    clean = (url or "").split("?")[0].rstrip("/")
     parts = clean.split("/")
     return parts[-1] if parts else ""
 
@@ -72,6 +87,28 @@ def extract_neighborhood(info):
     parts = str(info).split(",")
     return parts[1].strip() if len(parts) > 1 else ""
 
+def ensure_csv_columns(path, expected_cols):
+    """If `path` exists and is missing any of `expected_cols`, append the missing columns
+    (with empty values for historical rows) so new writes line up with the header."""
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return
+        rows = list(reader)
+    missing = [c for c in expected_cols if c not in header]
+    if not missing:
+        return
+    new_header = header + missing
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(new_header)
+        for row in rows:
+            w.writerow(row + [""] * len(missing))
+
 async def run():
     # ── Shared state needed both inside and after the browser block ───────────
     if os.path.exists(FIRST_SEEN_FILE):
@@ -80,7 +117,7 @@ async def run():
     else:
         first_seen = {}
     now   = datetime.now().strftime("%Y-%m-%d %H:%M")
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = shift_saturday_to_friday(datetime.now().strftime("%Y-%m-%d"))
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -174,6 +211,9 @@ async def run():
                     card_text = (await c.inner_text()).strip()
                     date_posted = parse_yad2_date(card_text)
                     url    = "https://www.yad2.co.il" + href if href and href.startswith("/") else href
+                    # Skip promoted widget blocks ("ListingPro") that aren't real listings
+                    if not url or "/realestate/item/" not in url:
+                        continue
                     if url in seen_urls: continue
                     seen_urls.add(url)
                     rooms = floor = size = ""
@@ -183,14 +223,34 @@ async def run():
                     if m: floor = m.group(1)
                     m = re.search(r"(\d+)\s*\u05de\u05f4\u05e8", line2)
                     if m: size = m.group(1)
-                    if price or street:
+                    # If the "floor" we captured equals the size, the listing actually has no
+                    # floor number (e.g. garden/penthouse) and the regex jumped to the sqm.
+                    if floor and floor == size:
+                        floor = ""
+                    # Require both a price AND a street so promoted/empty cards are dropped
+                    if price and street:
                         listings.append({"price":price,"street":street,"info":line1,"rooms":rooms,"floor":floor,"size_sqm":size,"url":url,"date_posted":date_posted})
                 except: continue
             nb = await pg.query_selector("a[aria-label='\u05e2\u05de\u05d5\u05d3 \u05d4\u05d1\u05d0']")
             if nb and await nb.get_attribute("aria-disabled") != "true":
                 await nb.click(); pnum += 1; await pg.wait_for_timeout(3000)
             else: break
-        print("Total:", len(listings), "listings")
+        print("Total:", len(listings), "listings (raw)")
+
+        # ── Dedupe by listing ID (Yad2 boosts paid ads to multiple search-result pages
+        #    under different ?pagination/spot/location query strings — same property,
+        #    counted N times). Key on the path segment, ignore query string.
+        seen = set()
+        deduped = []
+        for r in listings:
+            lid = extract_id_from_url(r.get("url", ""))
+            if not lid or lid in seen:
+                continue
+            seen.add(lid)
+            deduped.append(r)
+        if len(deduped) != len(listings):
+            print(f"Deduplicated: {len(listings)} -> {len(deduped)} ({len(listings) - len(deduped)} booster duplicates removed)")
+        listings = deduped
 
         # ── Merge fiber-intercepted dates with persistent cache ───────────────
         try:
@@ -201,14 +261,13 @@ async def run():
 
         print(f"  React fiber dates found: {len(intercepted_dates)}")
 
-        # Apply fiber dates to listings
+        # Apply fiber dates to listings (date_cache is keyed by listing-ID)
         for r in listings:
-            url = r.get("url", "")
-            listing_id = extract_id_from_url(url)
-            date = intercepted_dates.get(listing_id) or date_cache.get(url, "")
+            lid = extract_id_from_url(r.get("url", ""))
+            date = intercepted_dates.get(lid) or date_cache.get(lid, "")
             r["date_posted"] = date
-            if date:
-                date_cache[url] = date
+            if date and lid:
+                date_cache[lid] = date
 
         # ── Fallback: in-browser fetch (uses session cookies, bypasses bot block) ─
         still_missing = [r for r in listings if not r.get("date_posted") and r.get("url")]
@@ -239,24 +298,29 @@ async def run():
                     d = parse_yad2_date(raw or "")
                     if d:
                         r["date_posted"] = d
-                        date_cache[r["url"]] = d
+                        lid = extract_id_from_url(r.get("url", ""))
+                        if lid:
+                            date_cache[lid] = d
                         fetched_ok += 1
                 if batch_start + batch_size < len(still_missing):
                     print(f"  ...{min(batch_start+batch_size, len(still_missing))}/{len(still_missing)} done")
             print(f"  Got {fetched_ok}/{len(still_missing)} dates via browser fetch")
 
         # ── Final fallback: use first_seen date when all else fails ─────────
+        # both first_seen and date_cache are keyed by listing-ID (stable across runs)
         for r in listings:
             if not r.get("date_posted"):
-                url = r.get("url", "")
-                fs_date = first_seen.get(url, "") or first_seen.get(url.split("?")[0], "")
+                lid = extract_id_from_url(r.get("url", ""))
+                if not lid:
+                    continue
+                fs_date = first_seen.get(lid, "")
                 if fs_date:
                     r["date_posted"] = fs_date
-                    date_cache[url] = fs_date
+                    date_cache[lid] = fs_date
                 else:
                     r["date_posted"] = today
-                    first_seen[url] = today
-                    date_cache[url] = today
+                    first_seen[lid] = today
+                    date_cache[lid] = today
 
         matched = sum(1 for r in listings if r.get("date_posted"))
         print(f"  Total dates resolved: {matched}/{len(listings)} listings")
@@ -269,7 +333,10 @@ async def run():
         print("No listings scraped (bot block?). Exiting without overwriting data.")
         return
 
-    curr_map = {r["url"]: r for r in listings if r.get("url")}
+    # Cross-run maps are keyed by listing-ID (stable across runs). yad2 randomizes
+    # the URL query string on every page load, so URL-keyed comparison would mark
+    # ~all listings as both "new" and "removed" every run.
+    curr_map = {extract_id_from_url(r["url"]): r for r in listings if r.get("url")}
 
     # first_seen was loaded at the start of run() before browser launch
 
@@ -278,24 +345,25 @@ async def run():
     if os.path.exists(PREV_FILE):
         try:
             with open(PREV_FILE, encoding="utf-8") as f:
-                prev_map = {r["url"]: r for r in json.load(f) if r.get("url")}
+                prev_map = {extract_id_from_url(r["url"]): r for r in json.load(f) if r.get("url")}
         except Exception:
             prev_map = {}
 
-    new_urls     = set(curr_map) - set(prev_map)
-    removed_urls = set(prev_map) - set(curr_map)
-    common_urls  = set(prev_map) & set(curr_map)
+    new_ids     = set(curr_map) - set(prev_map)
+    removed_ids = set(prev_map) - set(curr_map)
+    common_ids  = set(prev_map) & set(curr_map)
 
-    # ── Add new URLs to first_seen ────────────────────────────────────────────
-    for url in new_urls:
-        first_seen[url] = today
+    # ── Add new IDs to first_seen ─────────────────────────────────────────────
+    for lid in new_ids:
+        if lid and lid not in first_seen:
+            first_seen[lid] = today
 
     # ── DOM log for removed listings ──────────────────────────────────────────
     dom_days_list = []
     dom_rows = []
-    for url in removed_urls:
-        r  = prev_map[url]
-        fs = first_seen.get(url, today)
+    for lid in removed_ids:
+        r  = prev_map[lid]
+        fs = first_seen.get(lid, today)
         try:
             dom = (datetime.strptime(today, "%Y-%m-%d") - datetime.strptime(fs, "%Y-%m-%d")).days
         except:
@@ -305,7 +373,7 @@ async def run():
         apt = str(r.get("info","")).split(",")[0].strip() if r.get("info") else ""
         dom_rows.append({
             "removed_date": today,
-            "url": url,
+            "url": r.get("url", ""),
             "first_seen": fs,
             "dom_days": dom,
             "price": r.get("price",""),
@@ -323,9 +391,9 @@ async def run():
     # ── Price changes ─────────────────────────────────────────────────────────
     cuts = rises = 0
     cut_pcts = []
-    for url in common_urls:
-        pp = parse_price_num(prev_map[url].get("price",""))
-        cp = parse_price_num(curr_map[url].get("price",""))
+    for lid in common_ids:
+        pp = parse_price_num(prev_map[lid].get("price",""))
+        cp = parse_price_num(curr_map[lid].get("price",""))
         if pp and cp:
             if cp < pp:
                 cuts += 1
@@ -335,9 +403,9 @@ async def run():
 
     # ── Survival rate (30 days) ───────────────────────────────────────────────
     cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-    old_urls = {u for u, d in first_seen.items() if d <= cutoff}
-    still_alive = old_urls & set(curr_map)
-    survival_30d = round(len(still_alive) / len(old_urls) * 100, 1) if old_urls else None
+    old_ids = {i for i, d in first_seen.items() if d <= cutoff}
+    still_alive = old_ids & set(curr_map)
+    survival_30d = round(len(still_alive) / len(old_ids) * 100, 1) if old_ids else None
 
     # ── Summary stats ─────────────────────────────────────────────────────────
     prices = [parse_price_num(r["price"]) for r in listings]
@@ -358,8 +426,23 @@ async def run():
     max_price    = sp[-1]                        if n else 0
     avg_ppsqm    = round(sum(sizes) / len(sizes)) if sizes else 0
     avg_cut_pct  = round(sum(cut_pcts) / len(cut_pcts), 2) if cut_pcts else 0
-    absorption   = round(len(removed_urls) / len(prev_map) * 100, 2) if prev_map else 0
+    absorption   = round(len(removed_ids) / len(prev_map) * 100, 2) if prev_map else 0
     avg_dom      = round(sum(dom_days_list) / len(dom_days_list), 1) if dom_days_list else None
+
+    # avg DOM of currently active listings (today - date_posted, falling back to first_seen)
+    active_doms = []
+    today_dt = datetime.strptime(today, "%Y-%m-%d")
+    for r in listings:
+        d = r.get("date_posted") or first_seen.get(extract_id_from_url(r.get("url", "")), "")
+        if not d:
+            continue
+        try:
+            days = (today_dt - datetime.strptime(d[:10], "%Y-%m-%d")).days
+            if days >= 0:
+                active_doms.append(days)
+        except Exception:
+            pass
+    avg_active_dom = round(sum(active_doms) / len(active_doms), 1) if active_doms else None
 
     # ── Append to history CSV ─────────────────────────────────────────────────
     hist_exists = os.path.exists(HISTORY_FILE)
@@ -368,11 +451,31 @@ async def run():
         if not hist_exists:
             w.writerow(["timestamp","count","avg_price","median_price","min_price","max_price",
                         "avg_price_per_sqm","price_cuts","price_rises",
-                        "avg_cut_pct","absorption_rate","survival_30d","avg_dom"])
+                        "avg_cut_pct","absorption_rate","survival_30d","avg_dom","avg_active_dom"])
         w.writerow([now, len(listings), avg_price, median_price, min_price, max_price,
                     avg_ppsqm, cuts, rises, avg_cut_pct, absorption,
                     survival_30d if survival_30d is not None else "",
-                    avg_dom if avg_dom is not None else ""])
+                    avg_dom if avg_dom is not None else "",
+                    avg_active_dom if avg_active_dom is not None else ""])
+
+    # ── Per-listing active DOM (today − date_posted) for the breakdowns below ──
+    nb_active_doms   = defaultdict(list)
+    type_active_doms = defaultdict(list)
+    for r in listings:
+        d = r.get("date_posted") or first_seen.get(extract_id_from_url(r.get("url","")), "")
+        if not d:
+            continue
+        try:
+            days = (today_dt - datetime.strptime(d[:10], "%Y-%m-%d")).days
+            if days < 0:
+                continue
+        except Exception:
+            continue
+        nb  = extract_neighborhood(r.get("info",""))
+        apt = str(r.get("info","")).split(",")[0].strip() or "דירה"
+        if nb:
+            nb_active_doms[nb].append(days)
+        type_active_doms[apt].append(days)
 
     # ── Neighborhood history ───────────────────────────────────────────────────
     nb_prices = defaultdict(list)
@@ -386,14 +489,18 @@ async def run():
         if p: nb_prices[nb].append(p)
         if p and s: nb_ppsqm[nb].append(p / s)
 
+    nb_cols = ["timestamp","neighborhood","avg_price","avg_price_per_sqm","count","avg_active_dom"]
+    ensure_csv_columns(NB_HISTORY_FILE, nb_cols)
     nb_exists = os.path.exists(NB_HISTORY_FILE)
     with open(NB_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not nb_exists:
-            w.writerow(["timestamp","neighborhood","avg_price","avg_price_per_sqm","count"])
+            w.writerow(nb_cols)
         for nb in nb_prices:
             ppsqm_avg = round(sum(nb_ppsqm[nb]) / len(nb_ppsqm[nb])) if nb_ppsqm.get(nb) else 0
-            w.writerow([now, nb, round(sum(nb_prices[nb]) / len(nb_prices[nb])), ppsqm_avg, len(nb_prices[nb])])
+            doms = nb_active_doms.get(nb, [])
+            nb_dom = round(sum(doms) / len(doms), 1) if doms else ""
+            w.writerow([now, nb, round(sum(nb_prices[nb]) / len(nb_prices[nb])), ppsqm_avg, len(nb_prices[nb]), nb_dom])
 
     # ── Type history ─────────────────────────────────────────────────────────────
     type_prices = defaultdict(list)
@@ -406,14 +513,18 @@ async def run():
         if p: type_prices[apt].append(p)
         if p and s: type_ppsqm[apt].append(p / s)
 
+    type_cols = ["timestamp","apt_type","avg_price","avg_price_per_sqm","count","avg_active_dom"]
+    ensure_csv_columns(TYPE_HISTORY_FILE, type_cols)
     type_exists = os.path.exists(TYPE_HISTORY_FILE)
     with open(TYPE_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not type_exists:
-            w.writerow(["timestamp","apt_type","avg_price","avg_price_per_sqm","count"])
+            w.writerow(type_cols)
         for apt in type_prices:
             ppsqm_avg = round(sum(type_ppsqm[apt]) / len(type_ppsqm[apt])) if type_ppsqm.get(apt) else 0
-            w.writerow([now, apt, round(sum(type_prices[apt]) / len(type_prices[apt])), ppsqm_avg, len(type_prices[apt])])
+            doms = type_active_doms.get(apt, [])
+            t_dom = round(sum(doms) / len(doms), 1) if doms else ""
+            w.writerow([now, apt, round(sum(type_prices[apt]) / len(type_prices[apt])), ppsqm_avg, len(type_prices[apt]), t_dom])
 
     # ── Save files (write to temp then rename so a crash never zeros the file) ──
     import tempfile
@@ -433,7 +544,7 @@ async def run():
         json.dump(first_seen, f, ensure_ascii=False, indent=2)
 
     print(f"Saved: {len(listings)} listings")
-    print(f"New: {len(new_urls)} | Removed: {len(removed_urls)} | Price cuts: {cuts} (avg {avg_cut_pct}%)")
+    print(f"New: {len(new_ids)} | Removed: {len(removed_ids)} | Price cuts: {cuts} (avg {avg_cut_pct}%)")
     print(f"Absorption: {absorption}% | Survival 30d: {survival_30d}%")
     if dom_days_list:
         print(f"Avg DOM (removed this run): {avg_dom} days")
@@ -448,7 +559,7 @@ async def run():
                         "avg_cut_pct","avg_price","median_price","min_price","max_price",
                         "avg_price_per_sqm","absorption_rate","survival_30d","avg_dom","error"])
         w.writerow([now, "success", pnum - 1, len(listings),
-                    len(new_urls), len(removed_urls), cuts, rises,
+                    len(new_ids), len(removed_ids), cuts, rises,
                     avg_cut_pct, avg_price, median_price, min_price, max_price,
                     avg_ppsqm, absorption,
                     survival_30d if survival_30d is not None else "",
