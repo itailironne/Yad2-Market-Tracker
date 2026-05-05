@@ -876,6 +876,8 @@ else:
             _chart(fig_qty, 280)
             qty_rng = _yrange(_qy)
             fig_qty.update_layout(yaxis_title="מודעות",
+                                  xaxis=dict(type="category", fixedrange=True,
+                                             categoryorder="array", categoryarray=list(_qx)),
                                   yaxis=dict(range=qty_rng, fixedrange=True,
                                              gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
             st.plotly_chart(fig_qty, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
@@ -906,6 +908,8 @@ else:
         _chart(fig_price, 280)
         p_rng = _yrange(_py)
         fig_price.update_layout(yaxis_title="₪/מ״ר",
+                                xaxis=dict(type="category", fixedrange=True,
+                                           categoryorder="array", categoryarray=list(_px)),
                                 yaxis=dict(range=p_rng, tickformat=",d", fixedrange=True,
                                            gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
         st.plotly_chart(fig_price, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
@@ -962,6 +966,8 @@ else:
             _chart(fig_dom, 300)
             dom_rng = _yrange(ys)
             fig_dom.update_layout(yaxis_title="ימים",
+                                  xaxis=dict(type="category", fixedrange=True,
+                                             categoryorder="array", categoryarray=list(xs)),
                                   yaxis=dict(range=dom_rng, fixedrange=True,
                                              gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
             st.plotly_chart(fig_dom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
@@ -1076,7 +1082,8 @@ else:
             ))
             _chart(fig_new, 280)
             fig_new.update_layout(yaxis_title="מודעות", bargap=0.3,
-                                  xaxis=dict(type="category", fixedrange=True))
+                                  xaxis=dict(type="category", fixedrange=True,
+                                             categoryorder="category ascending"))
             new_event = st.plotly_chart(
                 fig_new, use_container_width=True,
                 config=dict(displayModeBar=False, scrollZoom=False),
@@ -1102,7 +1109,8 @@ else:
             ))
             _chart(fig_rem, 280)
             fig_rem.update_layout(yaxis_title="מודעות", bargap=0.3,
-                                  xaxis=dict(type="category", fixedrange=True))
+                                  xaxis=dict(type="category", fixedrange=True,
+                                             categoryorder="category ascending"))
             rem_event = st.plotly_chart(
                 fig_rem, use_container_width=True,
                 config=dict(displayModeBar=False, scrollZoom=False),
