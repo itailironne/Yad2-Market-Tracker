@@ -1050,6 +1050,14 @@ else:
         dom_dedup["_lid"] = dom_dedup["url"].apply(_lid)
         # one removal event per unique listing per date
         dom_dedup = dom_dedup[dom_dedup["_lid"] != ""].drop_duplicates(subset=["_lid", "removed_date"])
+        # Drop listings that are currently active — those "removals" are
+        # legacy URL-keyed false positives (yad2 randomized URL query strings,
+        # so the same listing kept getting flagged as removed and re-added).
+        active_ids = {_lid(u) for u in df["url"] if u}
+        dom_dedup = dom_dedup[~dom_dedup["_lid"].isin(active_ids)]
+        # For listings that were really removed (don't exist now), keep only the
+        # LATEST removal date — earlier ones are URL-form changes, not real exits.
+        dom_dedup = dom_dedup.sort_values("removed_date").drop_duplicates(subset=["_lid"], keep="last")
         rem_by_date = dom_dedup.groupby("removed_date").size().sort_index()
     else:
         rem_by_date = pd.Series(dtype=int)
