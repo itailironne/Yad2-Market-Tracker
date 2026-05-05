@@ -282,9 +282,30 @@ async def run():
                         listings.append({"price":price,"street":street,"info":line1,"rooms":rooms,"floor":floor,"size_sqm":size,"url":url,"date_posted":date_posted})
                 except: continue
             nb = await pg.query_selector("a[aria-label='\u05e2\u05de\u05d5\u05d3 \u05d4\u05d1\u05d0']")
-            if nb and await nb.get_attribute("aria-disabled") != "true":
-                await nb.click(); pnum += 1; await pg.wait_for_timeout(3000)
-            else: break
+            if not nb or await nb.get_attribute("aria-disabled") == "true":
+                break
+            # Robust click: scroll into view, normal click with shorter timeout,
+            # fall back to JS-dispatched click if the button is overlapped by a
+            # banner/modal/ad. Without this, ~20% of runs fail at random pages.
+            clicked = False
+            try:
+                await nb.scroll_into_view_if_needed(timeout=5000)
+            except Exception:
+                pass
+            try:
+                await nb.click(timeout=10000)
+                clicked = True
+            except Exception:
+                try:
+                    await pg.evaluate("(el) => el.click()", nb)
+                    clicked = True
+                except Exception:
+                    pass
+            if not clicked:
+                print(f"  WARN: could not click 'next page' on page {pnum}; stopping pagination")
+                break
+            pnum += 1
+            await pg.wait_for_timeout(3000)
         print("Total:", len(listings), "listings (raw)")
 
         # ── Dedupe by listing ID (Yad2 boosts paid ads to multiple search-result pages
@@ -635,8 +656,28 @@ def log_error(error_msg):
                         "avg_price_per_sqm","absorption_rate","survival_30d","avg_dom","error"])
         w.writerow([now, "error", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", error_msg])
 
+async def run_with_retry(max_attempts=3, base_delay_s=60):
+    """Wrap run() with retry-and-backoff for transient failures (click timeouts,
+    network blips, bot blocks). Only the FINAL outcome lands in run_log.csv —
+    intermediate retries are printed but not logged, so the operator sees one
+    row per invocation regardless of how many retries it took."""
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await run()
+            return  # success
+        except Exception as e:
+            last_err = e
+            print(f"Attempt {attempt}/{max_attempts} failed: {e}")
+            if attempt < max_attempts:
+                delay = base_delay_s * attempt  # 60s, 120s
+                print(f"  retrying in {delay}s...")
+                await asyncio.sleep(delay)
+    raise last_err
+
+
 try:
-    asyncio.run(run())
+    asyncio.run(run_with_retry())
 except Exception as e:
-    print(f"ERROR: {e}")
+    print(f"ERROR (after retries): {e}")
     log_error(str(e))
