@@ -137,6 +137,55 @@ def enrich_missing_neighborhoods(listings):
         enriched += 1
     return enriched, ambiguous
 
+async def collect_listing_ids_from_url(pg, base_url):
+    """Navigate base_url and harvest listing-IDs across all pages. Reuses the
+    main scrape's robust click logic so a covered next-page button doesn't
+    abort the harvest. Used for per-neighborhood enrichment."""
+    ids = set()
+    try:
+        await pg.goto(base_url, timeout=60000, wait_until="domcontentloaded")
+    except Exception:
+        return ids
+    await pg.wait_for_timeout(2500)
+    while True:
+        cards = await pg.query_selector_all("[class*=feedItemBox]")
+        for c in cards:
+            try:
+                link_el = await c.query_selector("a[href]")
+                if not link_el:
+                    continue
+                href = await link_el.get_attribute("href") or ""
+                url = "https://www.yad2.co.il" + href if href.startswith("/") else href
+                if "/realestate/item/" not in url:
+                    continue
+                lid = extract_id_from_url(url)
+                if lid:
+                    ids.add(lid)
+            except Exception:
+                continue
+        nb = await pg.query_selector("a[aria-label='עמוד הבא']")
+        if not nb or await nb.get_attribute("aria-disabled") == "true":
+            break
+        clicked = False
+        try:
+            await nb.scroll_into_view_if_needed(timeout=3000)
+        except Exception:
+            pass
+        try:
+            await nb.click(timeout=8000)
+            clicked = True
+        except Exception:
+            try:
+                await pg.evaluate("(el) => el.click()", nb)
+                clicked = True
+            except Exception:
+                pass
+        if not clicked:
+            break
+        await pg.wait_for_timeout(2500)
+    return ids
+
+
 def ensure_csv_columns(path, expected_cols):
     """If `path` exists and is missing any of `expected_cols`, append the missing columns
     (with empty values for historical rows) so new writes line up with the header."""
@@ -327,8 +376,49 @@ async def run():
         # from listings whose card text DID include a neighborhood.
         enriched, ambiguous = enrich_missing_neighborhoods(listings)
         if enriched:
-            print(f"Neighborhood enrichment: filled {enriched} listings via street lookup"
+            print(f"Neighborhood enrichment (street lookup): filled {enriched} listings"
                   + (f" ({len(ambiguous)} ambiguous streets skipped)" if ambiguous else ""))
+
+        # ── Canonical neighborhood enrichment via per-neighborhood URLs ────────
+        # yad2 has a `&neighborhood=<id>` filter that is the SOURCE OF TRUTH for
+        # which neighborhood a listing belongs to (it's set from yad2's internal
+        # database, not from the listing's card text). For each known
+        # neighborhood we navigate the filtered URL and harvest listing-IDs,
+        # then override our card-text inference. IDs map lives in
+        # yad2_neighborhood_ids.json; populate it via _discover_neighborhood_ids.py.
+        nb_ids_file = os.path.join(OUT, "yad2_neighborhood_ids.json")
+        canonical_nb_map = {}
+        if os.path.exists(nb_ids_file):
+            try:
+                with open(nb_ids_file, encoding="utf-8") as f:
+                    nb_ids = json.load(f)
+            except Exception:
+                nb_ids = {}
+            if nb_ids:
+                print(f"Canonical neighborhood scrape: querying {len(nb_ids)} neighborhoods...")
+                for nb_name, nb_id in nb_ids.items():
+                    nb_url = f"https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-4&neighborhood={nb_id}"
+                    nb_listing_ids = await collect_listing_ids_from_url(pg, nb_url)
+                    for lid in nb_listing_ids:
+                        canonical_nb_map[lid] = nb_name
+                    print(f"    {nb_name}: {len(nb_listing_ids)} listings")
+                # Apply canonical map: override the 2nd info-part with the
+                # authoritative neighborhood from yad2.
+                rewritten = 0
+                for r in listings:
+                    lid = extract_id_from_url(r.get("url", ""))
+                    canonical = canonical_nb_map.get(lid)
+                    if not canonical:
+                        continue
+                    parts = str(r.get("info", "")).split(",")
+                    apt_type = parts[0].strip() if parts else "דירה"
+                    city     = parts[-1].strip() if len(parts) >= 2 else "רעננה"
+                    new_info = f"{apt_type}, {canonical}, {city}"
+                    if r.get("info") != new_info:
+                        r["info"] = new_info
+                        rewritten += 1
+                print(f"Canonical mapping rewrote {rewritten} listings; "
+                      f"{len(canonical_nb_map)} listing-IDs covered by canonical scrape.")
 
         # ── Merge fiber-intercepted dates with persistent cache ───────────────
         try:
