@@ -1,0 +1,9 @@
+# Brand theme — makes Streamlit's accent widgets (sliders, focus rings, selection)
+# use the Yad2 dashboard's blue instead of the default red (#ff4b4b).
+[theme]
+base = "light"
+primaryColor = "#2563eb"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f1f5f9"
+textColor = "#0f172a"
+font = "sans serif"

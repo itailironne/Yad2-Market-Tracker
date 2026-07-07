@@ -18,6 +18,11 @@ JSON_FILE       = os.path.join(OUT, "yad2_raanana_4rooms.json")
 CSV_FILE        = os.path.join(OUT, "yad2_raanana_4rooms.csv")
 HISTORY_FILE    = os.path.join(OUT, "yad2_history.csv")
 PREV_FILE       = os.path.join(OUT, "yad2_prev_run.json")
+# Snapshot of the run BEFORE the current one, kept so the dashboard can show
+# "what changed in the most recent run". PREV_FILE gets overwritten with the
+# current run at the end of every scrape (it is the baseline for the NEXT run's
+# diff), so the dashboard needs this separate, one-step-behind copy.
+DISPLAY_PREV_FILE = os.path.join(OUT, "yad2_prev_display.json")
 FIRST_SEEN_FILE = os.path.join(OUT, "yad2_first_seen.json")
 DOM_LOG_FILE    = os.path.join(OUT, "yad2_dom_log.csv")
 NB_HISTORY_FILE   = os.path.join(OUT, "yad2_neighborhood_history.csv")
@@ -907,6 +912,15 @@ async def run():
         w.writeheader(); w.writerows(listings)
         tmp_csv = tf.name
     os.replace(tmp_csv, CSV_FILE)
+    # Preserve the previous run's snapshot (copy2 keeps its original mtime, which
+    # the dashboard shows as the "since" time) BEFORE overwriting PREV_FILE with
+    # this run. Best-effort — never let it fail the scrape.
+    try:
+        if os.path.exists(PREV_FILE):
+            import shutil
+            shutil.copy2(PREV_FILE, DISPLAY_PREV_FILE)
+    except Exception as e:
+        print(f"  WARN: could not update display baseline: {e}")
     with open(PREV_FILE, "w", encoding="utf-8") as f:
         json.dump(listings, f, ensure_ascii=False, indent=2)
     with open(FIRST_SEEN_FILE, "w", encoding="utf-8") as f:

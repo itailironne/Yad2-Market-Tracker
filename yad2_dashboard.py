@@ -50,8 +50,16 @@ html, body, [class*="css"] {
     font-size: 0.82rem !important;
     color: #0f172a !important;
 }
-[data-testid="stSlider"] [data-baseweb="slider"] { padding-top: 4px !important; }
-[data-testid="stSlider"] > div { padding-top: 0 !important; }
+/* Give the thumb value bubble vertical room so it never collides with the
+   field label above it, and put it on-brand instead of the default red. */
+[data-testid="stSlider"] { padding-top: 16px !important; }
+[data-testid="stSlider"] [data-baseweb="slider"] { padding-top: 6px !important; }
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div:last-child,
+[data-testid="stSlider"] div[role="slider"] { color: #2563eb !important; }
+[data-testid="stTickBar"] { margin-top: 2px !important; }
+[data-testid="stTickBarMin"], [data-testid="stTickBarMax"] {
+    font-size: 0.64rem !important; color: #94a3b8 !important; font-weight: 600 !important;
+}
 [data-testid="stSidebar"] { direction: rtl; }
 [data-testid="stSidebar"] * { text-align: right; }
 
@@ -213,7 +221,7 @@ html, body, [class*="css"] {
     color: #64748b; font-size: 0.78rem; font-weight: 500;
     display: inline; margin: 0;
 }
-.card-desc::before { content: "·\00a0"; margin: 0 6px; color: #cbd5e1; }
+.card-desc::before { content: "· "; margin: 0 6px; color: #cbd5e1; }
 .card > .card-desc + * { display: block; margin-top: 8px; }
 
 /* ── Delta tiles ─────────────────────────────────────── */
@@ -351,11 +359,36 @@ div[data-testid="column"] { padding: 0 !important; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 1200px) {
+    .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 820px) {
+    .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
+    .kpi-strip  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .delta-row  { grid-template-columns: repeat(2, 1fr); }
+    .page-header h1 { font-size: 1.3rem; }
+    /* Stack side-by-side chart/column rows instead of letting them overflow */
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        flex: 1 1 100% !important; min-width: 100% !important;
+    }
+}
+@media (max-width: 480px) {
+    .kpi-strip { gap: 8px; }
+    .kpi { min-height: 124px; padding: 14px 14px 12px; }
+    .kpi-value { font-size: 1.4rem; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ── Theme colours ────────────────────────────────────────────────────────────────
-CYAN   = "#2563eb"
+# Brand palette is a blue→cyan gradient. Time-series lines use the brand hues;
+# GREEN/RED are reserved *status* colours (new vs removed, up vs down) and are
+# only ever used alongside a label, never as a decorative series colour.
+CYAN   = "#2563eb"   # brand blue  — primary series
+CYAN2  = "#0891b2"   # brand cyan  — secondary series (validated for contrast)
 GREEN  = "#10b981"
 RED    = "#ef4444"
 YELLOW = "#f59e0b"
@@ -386,6 +419,23 @@ def _daily(x, y, agg="last"):
         return x, y
     res = tmp.groupby("x")["y"].last() if agg == "last" else tmp.groupby("x")["y"].mean().round()
     return res.index.strftime("%d/%m/%y"), res.values
+
+def _sparse_labels(values, fmt):
+    """Direct-label only the first, last, min and max points; blank the rest.
+    Keeps time-series readable — never a number on every point — while still
+    calling out the extremes and the latest value. Hover shows every point."""
+    vals = list(values)
+    n = len(vals)
+    if n == 0:
+        return []
+    keep = {0, n - 1}
+    try:
+        nums = [float(v) for v in vals]
+        keep.add(nums.index(min(nums)))
+        keep.add(nums.index(max(nums)))
+    except Exception:
+        pass
+    return [fmt(v) if i in keep else "" for i, v in enumerate(vals)]
 
 def _yrange(values, pad_frac=0.08):
     """Return [min,max] for y-axis with `pad_frac` of the spread on each side.
@@ -486,7 +536,15 @@ def load_type_history():
 
 @st.cache_data(ttl=300)
 def detect_changes():
-    prev_file = os.path.join(DATA_DIR, "yad2_prev_run.json")
+    # Diff against the one-step-behind snapshot so this shows what changed in the
+    # MOST RECENT run. yad2_prev_run.json is overwritten with the current data at
+    # the end of every scrape (it seeds the next run's diff), so on its own it
+    # equals the current snapshot and every count comes out zero. The scraper
+    # keeps yad2_prev_display.json as the run-before-this-one; prefer it, and fall
+    # back to prev_run.json only until the next scrape creates the display file.
+    prev_file = os.path.join(DATA_DIR, "yad2_prev_display.json")
+    if not os.path.exists(prev_file):
+        prev_file = os.path.join(DATA_DIR, "yad2_prev_run.json")
     if not os.path.exists(prev_file):
         return None, None, None, None, None
     with open(prev_file, encoding="utf-8") as f:
@@ -734,10 +792,25 @@ if len(history) > 0:
     ref_med   = float(ref_row["median_price"])      if "median_price"      in ref_row and pd.notna(ref_row["median_price"])      else None
     ref_pps   = float(ref_row["avg_price_per_sqm"]) if "avg_price_per_sqm" in ref_row and pd.notna(ref_row["avg_price_per_sqm"]) else None
 
-d_count = _kpi_delta(len(fdf), ref_count)
-d_avg   = _kpi_delta(avg_p,    ref_avg)
-d_med   = _kpi_delta(med_p,    ref_med)
-d_pps   = _kpi_delta(ppsqm,    ref_pps)
+# The "vs week" baseline (ref_*) comes from the market-wide history file, so it
+# is only a valid comparison for the unfiltered view. When any filter is active
+# the KPI reflects a subset (e.g. one neighborhood) while the baseline is the
+# whole market — comparing them produced a bogus swing (e.g. 59 in one
+# neighborhood vs ~356 market-wide last week = a fake -83%). Hide the pills when
+# filtered; the value itself and the "תוצאות מסוננות" sub already signal the scope.
+is_filtered = (
+    sel_nb != "הכל" or sel_type != "הכל" or sel_rooms != "הכל" or sel_floor != "הכל"
+    or price_range != (price_min, price_max) or size_range != (size_min, size_max)
+)
+# A missing pill must still emit a non-blank line: an empty string here would
+# leave a whitespace-only line inside the HTML block, which Markdown treats as a
+# block terminator and then renders the following indented cards as raw text.
+# The spacer keeps the flex card's bottom alignment (like .kpi-delta's margin).
+_spacer = '<div class="kpi-spacer"></div>'
+d_count = _spacer if is_filtered else (_kpi_delta(len(fdf), ref_count) or _spacer)
+d_avg   = _spacer if is_filtered else (_kpi_delta(avg_p,    ref_avg)   or _spacer)
+d_med   = _spacer if is_filtered else (_kpi_delta(med_p,    ref_med)   or _spacer)
+d_pps   = _spacer if is_filtered else (_kpi_delta(ppsqm,    ref_pps)   or _spacer)
 
 st.markdown(f"""
 <div class="kpi-strip">
@@ -867,7 +940,7 @@ else:
                 mode="lines+markers+text",
                 line=dict(color=qty_color, width=2.8, shape="spline", smoothing=0.3),
                 marker=dict(size=7, color=qty_color, line=dict(color="#ffffff", width=2)),
-                text=[f"{int(v):,}" for v in _qy],
+                text=_sparse_labels(_qy, lambda v: f"{int(v):,}"),
                 textposition="top center",
                 textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
                 cliponaxis=False,
@@ -886,12 +959,10 @@ else:
     # ── Chart 2: Avg price per sqm over time ─────────────────────────────────────
     with gc2:
         st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="מחיר ממוצע לכל מ״ר על פני כל המודעות הפעילות. זה האינדיקטור הכי טוב למחיר נטו של השוק (מנטרל הבדלי גודל).">ⓘ</span>מחיר ממוצע למ״ר לאורך זמן</div><div class="card-desc">{scope_label} — עולה/יורד = התייקרות/הוזלה</div>', unsafe_allow_html=True)
-        if len(price_y.dropna()) >= 2:
-            trend_up = float(price_y.dropna().iloc[-1]) >= float(price_y.dropna().iloc[0])
-            p_color = RED if trend_up else GREEN
-            fill_col = "rgba(239,68,68,0.08)" if trend_up else "rgba(16,185,129,0.08)"
-        else:
-            p_color, fill_col = CYAN, "rgba(37,99,235,0.08)"
+        # Brand blue line; the up/down trend is already carried by the KPI delta
+        # pill and the card description, so the line stays on-brand rather than
+        # flashing red whenever prices tick up.
+        p_color, fill_col = CYAN, "rgba(37,99,235,0.07)"
         fig_price = go.Figure()
         _px, _py = _daily(price_x, price_y, agg="mean")
         fig_price.add_trace(go.Scatter(
@@ -899,7 +970,7 @@ else:
             mode="lines+markers+text",
             line=dict(color=p_color, width=2.8, shape="spline", smoothing=0.3),
             marker=dict(size=7, color=p_color, line=dict(color="#ffffff", width=2)),
-            text=[f"₪{int(v):,}" for v in _py],
+            text=_sparse_labels(_py, lambda v: f"₪{int(v):,}"),
             textposition="top center",
             textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
             cliponaxis=False,
@@ -955,9 +1026,9 @@ else:
             fig_dom = go.Figure(go.Scatter(
                 x=xs, y=ys,
                 mode="lines+markers+text",
-                line=dict(color=PURPLE, width=2.8, shape="spline", smoothing=0.3),
-                marker=dict(size=7, color=PURPLE, line=dict(color="#ffffff", width=2)),
-                text=[f"{v:.0f}" for v in ys],
+                line=dict(color=CYAN2, width=2.8, shape="spline", smoothing=0.3),
+                marker=dict(size=7, color=CYAN2, line=dict(color="#ffffff", width=2)),
+                text=_sparse_labels(ys, lambda v: f"{v:.0f}"),
                 textposition="top center",
                 textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
                 cliponaxis=False,
@@ -988,19 +1059,14 @@ else:
         nb_dom = nb_dom[(nb_dom["neighborhood"] != "") & (nb_dom["n"] >= 2)]
         nb_dom = nb_dom.sort_values("avg_dom", ascending=True)
         if len(nb_dom):
-            # Color: low DOM (fast) = green, high DOM (slow) = red
-            max_d = nb_dom["avg_dom"].max() or 1
-            def _col(d):
-                t = d / max_d
-                if t < 0.33:  return GREEN
-                if t < 0.66:  return YELLOW
-                return RED
-            colors = [_col(d) for d in nb_dom["avg_dom"]]
+            # Solid brand blue — the bar length and the sort order already encode
+            # days-on-market, so colour stays a single on-brand hue instead of a
+            # red/amber/green traffic-light.
             fig_nbdom = go.Figure(go.Bar(
                 x=nb_dom["avg_dom"].round(1),
                 y=nb_dom["neighborhood"],
                 orientation="h",
-                marker=dict(color=colors, line=dict(width=0)),
+                marker=dict(color=CYAN, line=dict(width=0)),
                 text=[f"{d:.0f} ימים · {int(n)} דירות" for d, n in zip(nb_dom["avg_dom"], nb_dom["n"])],
                 textposition="inside",
                 insidetextanchor="middle",
