@@ -2,3 +2,15 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Chrome profile holding Radware clearance cookies (warmed each run, machine-local)
+.yad2_chrome_profile/
+# Single-instance run lock (machine-local, transient)
+.yad2_scraper.lock
+
+# Runtime logs (scraper / watchdog / ad-hoc rescrapes)
+*.log
+# One-shot backup snapshots from data-cleaning scripts
+_backup*/
+# Generated PDF export of the README
+README_new.pdf

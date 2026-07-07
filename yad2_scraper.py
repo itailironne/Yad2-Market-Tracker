@@ -1,7 +1,16 @@
-import asyncio, json, csv, os, re
+import asyncio, json, csv, os, re, sys, subprocess, time
 from playwright.async_api import async_playwright
 from datetime import datetime, timedelta
 from collections import defaultdict
+
+# Force UTF-8 on stdout/stderr so Hebrew prints don't crash under Task Scheduler
+# (Windows defaults stdout to cp1252 when there's no attached console).
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 URL             = "https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-4"
 OUT             = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +24,28 @@ NB_HISTORY_FILE   = os.path.join(OUT, "yad2_neighborhood_history.csv")
 TYPE_HISTORY_FILE = os.path.join(OUT, "yad2_type_history.csv")
 RUN_LOG_FILE      = os.path.join(OUT, "yad2_run_log.csv")
 DATE_POSTED_FILE  = os.path.join(OUT, "yad2_date_posted.json")
+# Dedicated Chrome profile that holds Radware Bot-Manager clearance cookies.
+# Warmed by a genuine (non-automated) Chrome before every run, then reused by
+# Playwright — see warm_clearance() and the launch_persistent_context() call.
+PROFILE_DIR       = os.path.join(OUT, ".yad2_chrome_profile")
+# Single-instance lock. The scraper is launched from three places (the 08:00/
+# 20:00 scheduled tasks, the hourly watchdog, and manual runs). Two runs at once
+# would fight over PROFILE_DIR (a Chrome profile allows only one live process)
+# and clobber each other's output files, so only one may hold this lock.
+LOCK_FILE         = os.path.join(OUT, ".yad2_scraper.lock")
+
+# Pagination sanity threshold. Healthy Ra'anana 4-room scrapes hit 17-18 pages.
+# A run that stops earlier almost always means Yad2 served a degraded page (bot
+# throttle): listings render but the "next" button is missing, so the scraper
+# silently exits with a fraction of the data. Raising on early stops lets
+# run_with_retry kick in and avoids overwriting prev_run with a partial snapshot.
+MIN_PAGES_FOR_TRUST = 10
+# If the new run has fewer than this fraction of the previous run's listings,
+# refuse to overwrite the baseline files — likely a partial scrape. Tightened
+# from 0.6 → 0.9 after a 2026-05-17 run (262/363 = 72%) slipped past the old
+# threshold and falsely marked ~100 listings as removed. Real daily churn on a
+# stable search is <10%; anything beyond that warrants a retry.
+MIN_LISTINGS_FRACTION_VS_PREV = 0.9
 
 def parse_price_num(p):
     p = str(p).replace(",","").replace("\u20aa","").replace("\u20aa","").strip()
@@ -208,6 +239,151 @@ def ensure_csv_columns(path, expected_cols):
         for row in rows:
             w.writerow(row + [""] * len(missing))
 
+# ── Radware Bot-Manager clearance ─────────────────────────────────────────────
+# Yad2 sits behind Radware Bot Manager (the "stormcaster" script). A cold
+# Playwright/CDP browser is served a "Radware Page" JS-challenge that never
+# clears, so pagination dies on page 1 ("expected >= 10 pages; likely bot-block").
+# A *genuine* Chrome, however, solves that challenge automatically (no CAPTCHA)
+# and deposits clearance cookies (__uzm*/uzmx) into its profile. So we warm a
+# dedicated profile with a real, visible Chrome first, then let Playwright reuse
+# that same profile — it inherits the clearance and scrapes normally.
+CHROME_CANDIDATES = [
+    os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+                 r"Google\Chrome\Application\chrome.exe"),
+    os.path.join(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+                 r"Google\Chrome\Application\chrome.exe"),
+    os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                 r"Google\Chrome\Application\chrome.exe"),
+]
+
+def find_chrome_exe():
+    for path in CHROME_CANDIDATES:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+def _pid_alive(pid):
+    """True if a process with this PID is currently running (Windows)."""
+    try:
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                             capture_output=True, text=True, timeout=10).stdout
+        return str(pid) in out
+    except Exception:
+        return True  # can't tell → assume alive so we don't steal a live lock
+
+def acquire_single_instance_lock():
+    """Return True if we now hold the run lock, False if another live scraper
+    already does. A crashed run leaves a stale lock (PID no longer alive); we
+    detect that and steal it."""
+    try:
+        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        try:
+            with open(LOCK_FILE) as f:
+                pid = int((f.read().strip() or "0"))
+        except Exception:
+            pid = 0
+        if pid and pid != os.getpid() and _pid_alive(pid):
+            return False
+        try:
+            os.remove(LOCK_FILE)                       # stale lock — reclaim it
+            fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except OSError:
+            return False
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    return True
+
+def release_single_instance_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except OSError:
+        pass
+
+def warm_clearance(url, wait_s=40):
+    """Launch a genuine, VISIBLE Chrome on PROFILE_DIR so Radware's JS challenge
+    solves itself and clearance cookies land in the profile, then kill it so the
+    profile is free for Playwright to reuse.
+
+    Must be visible and on-screen: the challenge checks page visibility, so an
+    off-screen or minimized window does not clear. A fresh-profile challenge can
+    need ~40s to solve; ensure_radware_clearance() re-warms with more time if a
+    given warm didn't take. No-op with a warning if Chrome isn't found."""
+    exe = find_chrome_exe()
+    if not exe:
+        print("  WARN: genuine Chrome not found; cannot warm Radware clearance.")
+        return
+    print(f"  Warming Radware clearance via genuine Chrome ({wait_s}s)...")
+    proc = subprocess.Popen([
+        exe, f"--user-data-dir={PROFILE_DIR}",
+        "--no-first-run", "--no-default-browser-check",
+        "--new-window", url,
+    ])
+    try:
+        time.sleep(wait_s)
+    finally:
+        # Kill the whole process tree (Chrome spawns child renderers) so the
+        # profile lock is released before Playwright opens the same dir.
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                       capture_output=True)
+        time.sleep(3)
+
+
+async def _launch_profile_context(p):
+    """Open the warmed Chrome profile with Playwright. channel="chrome" drives
+    the real installed Chrome (matching UA + client hints) rather than
+    Playwright's bundled Chromium; headful is required because headless Chrome is
+    re-fingerprinted and re-challenged even with valid clearance cookies. We
+    deliberately do NOT override user_agent — a spoofed UA that contradicts the
+    browser's client hints is itself a bot signal (the old Chrome/124 UA was one
+    reason detection tightened)."""
+    context = await p.chromium.launch_persistent_context(
+        PROFILE_DIR,
+        channel="chrome",
+        headless=False,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ],
+        locale="he-IL", timezone_id="Asia/Jerusalem",
+        viewport={"width": 1360, "height": 900},
+    )
+    await context.add_init_script(
+        "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
+    )
+    return context
+
+
+async def ensure_radware_clearance(p, warm_waits=(40, 55, 70)):
+    """Warm the profile with a genuine Chrome and confirm the clearance actually
+    took before the real scrape starts. A fresh-profile Radware challenge is
+    non-deterministic — one warm occasionally isn't enough — so we verify with a
+    throwaway context and re-warm (longer each time) until the feed renders.
+    Raises if it never clears, letting run_with_retry back off and try later."""
+    for attempt, wait_s in enumerate(warm_waits, 1):
+        warm_clearance(URL, wait_s=wait_s)
+        ctx = await _launch_profile_context(p)
+        cleared = False
+        try:
+            pg = ctx.pages[0] if ctx.pages else await ctx.new_page()
+            await pg.goto(URL, timeout=60000, wait_until="domcontentloaded")
+            try:
+                await pg.wait_for_selector("[class*=feedItemBox]", timeout=15000)
+            except Exception:
+                pass
+            cleared = "Radware" not in (await pg.title())
+        finally:
+            await ctx.close()
+        if cleared:
+            print(f"  Radware clearance confirmed (warm attempt {attempt}/{len(warm_waits)}).")
+            return
+        print(f"  Radware still blocking after warm attempt {attempt}/{len(warm_waits)}; re-warming...")
+    raise RuntimeError(
+        "Could not obtain Radware clearance after repeated warm-ups; will retry."
+    )
+
+
 async def run():
     # ── Shared state needed both inside and after the browser block ───────────
     if os.path.exists(FIRST_SEEN_FILE):
@@ -219,25 +395,14 @@ async def run():
     today = shift_saturday_to_friday(datetime.now().strftime("%Y-%m-%d"))
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-cache",
-                "--disable-application-cache",
-                "--disk-cache-size=0",
-                "--media-cache-size=0",
-                "--disable-gpu-shader-disk-cache",
-            ]
-        )
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            locale="he-IL", timezone_id="Asia/Jerusalem",
-            viewport={"width": 1280, "height": 800}
-        )
-        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });")
-        pg = await context.new_page()
+        # Warm the profile with a genuine Chrome and confirm Radware clearance
+        # took (re-warming if a fresh-profile challenge needs longer) BEFORE the
+        # real scrape context opens, so pagination never dies on the challenge.
+        await ensure_radware_clearance(p)
+
+        # Reuse the now-cleared profile for the actual scrape.
+        context = await _launch_profile_context(p)
+        pg = context.pages[0] if context.pages else await context.new_page()
         listings = []
         seen_urls = set()
         pnum = 1
@@ -260,7 +425,20 @@ async def run():
 
         print(datetime.now().strftime("%Y-%m-%d %H:%M"), "- Starting Yad2 scrape...")
         await pg.goto(URL, timeout=60000, wait_until="domcontentloaded")
-        await pg.wait_for_timeout(3000)
+        # Wait for the feed to render, then confirm Radware clearance held. If the
+        # warm-up cookies expired or failed we stay on the "Radware Page" challenge
+        # with no cards — fail fast so run_with_retry re-warms and retries instead
+        # of silently "stopping at page 1" and saving a partial snapshot.
+        try:
+            await pg.wait_for_selector("[class*=feedItemBox]", timeout=15000)
+        except Exception:
+            pass
+        if "Radware" in (await pg.title()):
+            await context.close()
+            raise RuntimeError(
+                "Radware challenge not cleared after warm-up (still on challenge "
+                "page); will retry with a fresh warm."
+            )
         while True:
             print("  Page", pnum)
             await pg.wait_for_timeout(2000)
@@ -356,6 +534,17 @@ async def run():
             pnum += 1
             await pg.wait_for_timeout(3000)
         print("Total:", len(listings), "listings (raw)")
+
+        # Detect bot-throttled partial scrapes. Yad2 sometimes serves a page
+        # where the "next" button is missing/disabled even though more results
+        # exist — the loop above breaks cleanly and we'd save garbage. Raise
+        # so run_with_retry retries with backoff instead of corrupting state.
+        if pnum < MIN_PAGES_FOR_TRUST:
+            await context.close()
+            raise RuntimeError(
+                f"Pagination stopped at page {pnum} (expected >= {MIN_PAGES_FOR_TRUST}); "
+                f"likely bot-block. Refusing to save partial snapshot."
+            )
 
         # ── Dedupe by listing ID (Yad2 boosts paid ads to multiple search-result pages
         #    under different ?pagination/spot/location query strings — same property,
@@ -495,7 +684,7 @@ async def run():
         with open(DATE_POSTED_FILE, "w", encoding="utf-8") as f:
             json.dump(date_cache, f, ensure_ascii=False)
 
-        await browser.close()
+        await context.close()
 
     if not listings:
         print("No listings scraped (bot block?). Exiting without overwriting data.")
@@ -516,6 +705,18 @@ async def run():
                 prev_map = {extract_id_from_url(r["url"]): r for r in json.load(f) if r.get("url")}
         except Exception:
             prev_map = {}
+
+    # Second-line defense: even if pagination didn't trip the early-stop guard,
+    # a sudden ≥40% drop vs the previous run almost always means we missed
+    # listings (silent partial scrape). Refuse to overwrite the baseline so
+    # tomorrow's diff doesn't cascade more false-removals.
+    if prev_map and len(curr_map) < MIN_LISTINGS_FRACTION_VS_PREV * len(prev_map):
+        raise RuntimeError(
+            f"Listing count dropped from {len(prev_map)} to {len(curr_map)} "
+            f"({len(curr_map)/len(prev_map)*100:.1f}% of previous, "
+            f"threshold {int(MIN_LISTINGS_FRACTION_VS_PREV*100)}%); "
+            f"likely partial scrape. Refusing to save."
+        )
 
     new_ids     = set(curr_map) - set(prev_map)
     removed_ids = set(prev_map) - set(curr_map)
@@ -746,11 +947,14 @@ def log_error(error_msg):
                         "avg_price_per_sqm","absorption_rate","survival_30d","avg_dom","error"])
         w.writerow([now, "error", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", error_msg])
 
-async def run_with_retry(max_attempts=3, base_delay_s=60):
+async def run_with_retry(max_attempts=6, retry_delays_s=(300, 600, 1200, 2400, 3600)):
     """Wrap run() with retry-and-backoff for transient failures (click timeouts,
     network blips, bot blocks). Only the FINAL outcome lands in run_log.csv —
     intermediate retries are printed but not logged, so the operator sees one
-    row per invocation regardless of how many retries it took."""
+    row per invocation regardless of how many retries it took.
+
+    Default budget: 6 attempts spread over ~2¼ hours (5min, 10min, 20min, 40min,
+    60min) — gives heavy Yad2 throttles time to self-heal before giving up."""
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
@@ -760,14 +964,19 @@ async def run_with_retry(max_attempts=3, base_delay_s=60):
             last_err = e
             print(f"Attempt {attempt}/{max_attempts} failed: {e}")
             if attempt < max_attempts:
-                delay = base_delay_s * attempt  # 60s, 120s
-                print(f"  retrying in {delay}s...")
+                delay = retry_delays_s[min(attempt - 1, len(retry_delays_s) - 1)]
+                print(f"  retrying in {delay}s ({delay // 60} min)...")
                 await asyncio.sleep(delay)
     raise last_err
 
 
+if not acquire_single_instance_lock():
+    print("Another scraper instance is already running; exiting.")
+    sys.exit(0)
 try:
     asyncio.run(run_with_retry())
 except Exception as e:
     print(f"ERROR (after retries): {e}")
     log_error(str(e))
+finally:
+    release_single_instance_lock()

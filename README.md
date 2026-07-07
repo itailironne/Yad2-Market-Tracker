@@ -50,6 +50,15 @@ python yad2_scraper.py
 - Takes ~5–10 minutes (18 pages + date fetching for all listings)
 - Scheduled to run automatically at **08:00** and **20:00** daily
 - Output is printed to console: pages scraped, dates fetched, changes detected
+- **Opens real Chrome windows** for ~1 minute at the start (the anti-bot warm-up,
+  see [Bot Protection](#bot-protection-radware--the-chrome-warm-up) below), then a
+  scraping window for the rest of the run. This is expected — leave them alone.
+- **Must run in a logged-on desktop session.** The scrape is headful (a visible
+  browser), so it cannot run as a background/session-0 task. The scheduled tasks
+  are already set to *Interactive* logon, which is correct.
+- Only **one** scraper runs at a time — a lock file (`.yad2_scraper.lock`) makes
+  overlapping launches (scheduled + watchdog + manual) exit immediately instead
+  of fighting over the browser profile.
 
 ---
 
@@ -181,28 +190,100 @@ One row per scraper run:
 
 | Section | What it shows |
 |---------|--------------|
-| **Sidebar** | Filters: price range, size, apt type, rooms, floor, neighbourhood. Live pill showing new/removed/price-changes since last run. |
-| **KPI strip** | Active listings · Avg price · Median price · Min price · Price per m² |
-| **Market trends** | Price per m² over time · Listing count over time · Price range (min/avg/median/max) · Price cuts vs rises per run |
-| **Time & absorption** | Absorption rate · 30-day survival · Avg DOM (removed listings) · Avg price cut depth · DOM distribution histogram · DOM by neighbourhood |
-| **Price analysis** | Price bands (<2M / 2–3M / 3–4M / 4–5M / 5M+) |
-| **Changes since last run** | Tabs: New listings · Removed listings · Price changes (with before/after) |
-| **Current snapshot** | Price distribution histogram · Apt type pie chart · Supply by neighbourhood · Size vs price scatter · Avg price by neighbourhood |
-| **Full table** | All active listings with search, max-days filter, max-price filter. Columns: price, street, neighbourhood, type, rooms, floor, size, **date posted**, **days on market**, link. |
-| **Run log** | History of every scraper run with all stats |
+| **Sidebar** | Filters: price range, size, apt type, rooms, floor, neighbourhood. Live status panel showing the last update time, listing count, and pills with new/removed/price-changes since the previous run. |
+| **Page header** | Eyebrow badge, gradient title, last-update timestamp. |
+| **Run-status banner** | Always-visible health indicator at the top. Green ✅ when the last run succeeded, red ❌ with the exact error message when it failed, yellow ⚠️ when the last run is more than 14 hours old. |
+| **KPI strip** | Active listings · Avg price · Median price · Min price · Price per m². Each card has an icon and a gradient value. |
+| **Market trends** | Listing quantity over time · Avg price per m² over time · Price cuts vs rises per run · Avg cut depth %. Filterable from the sidebar by neighbourhood and apartment type. |
+| **Changes since last run** | 4 delta tiles (new / removed / cuts / rises) plus tabs with full tables: new listings, removed listings, price changes (before → after). |
+| **Full table (AgGrid)** | All active listings with Excel-style filter buttons (▼) on every column header. Includes price, street, neighbourhood, type, rooms, floor, size, **date posted**, **days on market**, and a link button. |
+| **Run log** | History of every scraper run with all stats. |
+
+### Chart behaviour
+- **One point per day**: same-day scraper runs are collapsed via a `_daily()` helper so each calendar day shows only once on the x-axis.
+- **No zoom**: charts are read-only — `dragmode=False`, `scrollZoom=False`, and `fixedrange=True` on both axes.
+- **Categorical x-axis**: dates render as string labels (`%d/%m/%y`) so they never duplicate.
+
+---
+
+## Saturday → Friday Rule
+
+Yad2 activity drops sharply on Shabbat (Saturday in Israel). To prevent Saturday from skewing the charts:
+
+- **In the scraper** — `shift_saturday_to_friday(date_str)` automatically rewrites any date that lands on a Saturday to the previous Friday. It is applied to:
+  - `today` (used for `first_seen` and `removed_date`)
+  - every `date_posted` parsed from Yad2 (via `parse_yad2_date`)
+- **In history files** — `yad2_history.csv`, `yad2_neighborhood_history.csv`, `yad2_type_history.csv`, and `yad2_run_log.csv` exclude Saturday rows entirely.
+- **Existing data** — was retroactively cleaned by `_cleanup_saturdays.py` (one-shot script). A backup of all originals lives in `_backup_before_saturday_cleanup/`.
+
+The result: the dashboard never shows Saturday as a separate day — its activity is rolled into Friday.
+
+---
+
+## Bot Protection (Radware) & the Chrome Warm-Up
+
+Yad2 sits behind **Radware Bot Manager** (its client-side script is `stormcaster`).
+A cold automated browser — Playwright driving Chromium over CDP, headless or not —
+is served a **"Radware Page"** JavaScript challenge that never clears. When that
+happens the feed renders zero listings and pagination dies on page 1, producing
+the tell-tale error:
+
+```
+Pagination stopped at page 1 (expected >= 10); likely bot-block.
+```
+
+A *genuine* Chrome, however, solves the same challenge automatically (no CAPTCHA)
+and stores clearance cookies (`uzmx`, `__uzm*`) in its profile. The scraper
+exploits this in two phases:
+
+1. **Warm-up** — `warm_clearance()` launches a **real, visible Chrome** (via
+   `channel="chrome"`) on a dedicated profile (`.yad2_chrome_profile/`), waits
+   ~40s for it to pass the challenge, then closes it. `ensure_radware_clearance()`
+   opens a throwaway Playwright context to *confirm* the feed actually renders,
+   and re-warms with more time if a given attempt didn't take.
+2. **Scrape** — Playwright reopens that same warmed profile with
+   `launch_persistent_context(channel="chrome", headless=False)` and inherits the
+   clearance, so the whole 18-page scrape (plus per-neighborhood sweeps and the
+   in-browser date fetches) sails through.
+
+Why it must be this way — each was verified against the live site:
+
+| Constraint | Reason |
+|-----------|--------|
+| **Genuine Chrome for the warm-up** | Radware fingerprints Playwright's CDP channel; a cold Playwright browser is blocked even with `navigator.webdriver` masked. |
+| **Visible, on-screen window** | The challenge checks page visibility — off-screen or minimized warm-up windows do **not** clear. Hence the run must be in a logged-on session. |
+| **Headful scrape** | Headless Chrome is re-fingerprinted and re-challenged even *with* valid clearance cookies. |
+| **No spoofed user-agent** | A UA that contradicts the browser's real client-hints is itself a bot signal. (The previous hard-coded `Chrome/124` UA was one reason detection tightened.) |
+| **Single-instance lock** | Two runs would fight over the one Chrome profile and clobber each other's output. |
+
+The dedicated profile and the lock file are machine-local and git-ignored.
 
 ---
 
 ## Date Extraction — How It Works
 
-Getting the real posting date from Yad2 requires three attempts in order:
+Getting the real posting date from Yad2 requires multiple attempts in order:
 
 1. **React fiber state** — reads dates directly from React component memory on the feed page (zero extra requests). Works when Yad2 exposes the date in component props.
 2. **Network response interception** — captures Yad2's own API JSON responses during page load and extracts dates from them automatically.
-3. **In-browser fetch fallback** — for any listing still missing a date, the scraper uses the already-loaded browser (which has valid session cookies) to fetch each individual listing page via JavaScript `fetch()`. This bypasses Yad2's bot-protection (ShieldSquare). Parses `פורסם ב DD/MM/YY` from the HTML. Runs in batches of 20 in parallel.
+3. **In-browser fetch fallback** — for any listing still missing a date, the scraper uses the already-loaded browser (which has valid session cookies and Radware clearance) to fetch each individual listing page via JavaScript `fetch()`. This rides the cleared session past Yad2's bot-protection. Parses `פורסם ב DD/MM/YY` from the HTML. Runs in batches of 20 in parallel.
 4. **First-seen safety net** — if all else fails, uses the date we first noticed the listing in our tracker.
 
+Every date that comes out of these steps is then run through `shift_saturday_to_friday()` so Saturdays never enter the dataset.
+
 Fetched dates are permanently cached in `yad2_date_posted.json` so they are never re-fetched on subsequent runs.
+
+---
+
+## Design / UI
+
+- **Theme**: light, slate-based (#f8fafc bg, #ffffff cards, #2563eb→#06b6d4 brand gradient).
+- **Typography**: Inter + Heebo (Hebrew), 800-weight gradient title, refined size hierarchy.
+- **KPI cards**: white with subtle border, hover lift, top accent bar that slides in on hover, gradient value text.
+- **Tabs**: pill-style, selected tab gets a blue→cyan gradient with shadow.
+- **AgGrid table**: striped rows, hover state, rounded corners, custom link buttons.
+- **Charts**: transparent backgrounds (cards show through), light grid, larger markers with white outlines.
+- **Run-status banner**: gradient backgrounds (green/red/yellow) with subtle shadow.
 
 ---
 
@@ -210,8 +291,11 @@ Fetched dates are permanently cached in `yad2_date_posted.json` so they are neve
 
 ```
 Python 3.10+
-playwright (pip install playwright && playwright install chromium)
+Google Chrome  (the real, installed browser — driven via channel="chrome" and
+               used to warm Radware clearance; not Playwright's bundled Chromium)
+playwright (pip install playwright)
 streamlit
+streamlit-aggrid
 pandas
 plotly
 ```
@@ -220,4 +304,26 @@ plotly
 
 ## Automation Schedule
 
-The scraper is configured to run automatically at **08:00** and **20:00** every day via Windows Task Scheduler. Each run takes ~5–10 minutes. The dashboard footer shows the last update time.
+The scraper is configured to run automatically at **08:00** and **20:00** every day via Windows Task Scheduler. Each run takes ~5–10 minutes.
+
+### Important Task Scheduler settings
+For each task (Yad2_Morning / Yad2_Evening), under **Properties**:
+- **General tab** → ✅ *Run only when user is logged on* (an **Interactive** logon).
+  The scrape is headful — it opens a visible Chrome window — so it needs a real
+  desktop session. A "run whether user is logged on or not" task runs in session 0
+  with no desktop and the anti-bot warm-up will fail.
+- **Settings tab** → ✅ *Run task as soon as possible after a scheduled start is missed*
+- **Conditions tab** → ✅ *Wake the computer to run this task*
+
+Without these, if the computer is asleep or logged off at 08:00 / 20:00 the run is silently skipped — and you'll see the yellow ⚠️ "stale" banner on the dashboard the next time you open it.
+
+A companion task **Yad2_Watcher** runs `yad2_watcher.py` hourly: if the last
+successful run is more than ~13h old (e.g. the machine was asleep at both
+scheduled times) it triggers a catch-up scrape. The single-instance lock keeps it
+from colliding with a scheduled or manual run.
+
+---
+
+## Repository
+
+The full source is on GitHub: **[github.com/itailironne/Yad2-Market-Tracker](https://github.com/itailironne/Yad2-Market-Tracker)**
