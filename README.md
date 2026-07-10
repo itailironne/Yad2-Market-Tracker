@@ -1,6 +1,8 @@
-# Yad2 Real Estate Market Tracker — Ra'anana 4-Room Apartments
+# Yad2 Real Estate Market Tracker — Ra'anana 4–5-Room Apartments
 
-A fully automated system that scrapes, tracks, and visualises the Ra'anana 4-room apartment market on Yad2. It runs twice daily, detects every new listing, price change, and removal, and presents everything in a live interactive dashboard.
+A fully automated system that scrapes, tracks, and visualises the Ra'anana 4- and 5-room apartment market on Yad2. It runs twice daily, detects every new listing, price change, and removal, and presents everything in a live interactive dashboard.
+
+> **Note:** The data files are still named `…_4rooms.*` for historical continuity — they now hold 4- **and** 5-room listings (`rooms=4-5`). Use the dashboard's **חדרים** filter to split them, and expect a step-up in the market-wide history charts on the date 5-room listings were first included.
 
 ---
 

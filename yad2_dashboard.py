@@ -465,6 +465,14 @@ def load_current(_mtime):
     df["price_num"] = df["price"].apply(parse_price_num)
     for col in ["rooms", "floor", "size_sqm"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    # Drop clearly-invalid listings (Yad2 data-entry typos: ₪12,700 apartments,
+    # 10 m² or 11,526 m² sizes) so they don't blow out the slider ranges and skew
+    # min-price / price-per-m². Non-destructive — the raw data files keep
+    # everything; this only affects what the dashboard displays. Listings with a
+    # MISSING price or size are kept (e.g. "price on request").
+    _price_ok = df["price_num"].isna() | (df["price_num"] >= 500_000)
+    _size_ok  = df["size_sqm"].isna()  | ((df["size_sqm"] >= 25) & (df["size_sqm"] <= 1000))
+    df = df[_price_ok & _size_ok].reset_index(drop=True)
     def exf(info, idx):
         parts = str(info).split(",")
         return parts[idx].strip() if len(parts) > idx else ""
@@ -516,6 +524,11 @@ def load_history():
     df = df.rename(columns={"count": "כמות"})
     return df.sort_values("date").reset_index(drop=True)
 
+def _norm_rooms(df):
+    if "rooms" in df.columns:
+        df["rooms"] = df["rooms"].astype(str).str.replace(r"\.0$", "", regex=True)
+    return df
+
 @st.cache_data(ttl=300)
 def load_nb_history():
     path = os.path.join(DATA_DIR, "yad2_neighborhood_history.csv")
@@ -523,7 +536,7 @@ def load_nb_history():
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
     df["date"] = pd.to_datetime(df["timestamp"])
-    return df.sort_values("date").reset_index(drop=True)
+    return _norm_rooms(df).sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
 def load_type_history():
@@ -532,6 +545,16 @@ def load_type_history():
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
     df["date"] = pd.to_datetime(df["timestamp"])
+    return _norm_rooms(df).sort_values("date").reset_index(drop=True)
+
+@st.cache_data(ttl=300)
+def load_rooms_history():
+    path = os.path.join(DATA_DIR, "yad2_rooms_history.csv")
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    df["date"]  = pd.to_datetime(df["timestamp"])
+    df["rooms"] = df["rooms"].astype(str).str.replace(r"\.0$", "", regex=True)
     return df.sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
@@ -605,6 +628,7 @@ df        = load_current(_mtime)
 history   = load_history()
 nb_hist   = load_nb_history()
 type_hist = load_type_history()
+rooms_hist = load_rooms_history()
 run_log   = load_run_log()
 chg      = detect_changes()
 new_df, rem_df, price_df, prev_time, curr_time = (
@@ -652,7 +676,7 @@ _defaults = {
     "flt_price":  (price_min, price_max),
     "flt_size":   (size_min, size_max),
     "flt_type":   "הכל",
-    "flt_rooms":  "הכל",
+    "flt_rooms":  "4",
     "flt_floor":  "הכל",
     "flt_nb":     "הכל",
     "quick_range": "הכל",
@@ -674,7 +698,9 @@ with fb2:
 with fb3:
     sel_type = st.selectbox("סוג נכס", ["הכל"] + apt_types, key="flt_type")
 with fb4:
-    sel_rooms = st.selectbox("חדרים", ["הכל"] + [str(r) for r in rooms_opts], key="flt_rooms")
+    # Primary view switch: 4-room OR 5-room (bucket "4" = 4/4.5, "5" = 5+).
+    sel_rooms = st.selectbox("חדרים", ["4", "5"],
+                             format_func=lambda r: f"{r} חדרים", key="flt_rooms")
 with fb5:
     sel_floor = st.selectbox("קומה", ["הכל"] + [str(f) for f in floors_opts], key="flt_floor")
 with fb6:
@@ -693,7 +719,9 @@ mask = (
 )
 if sel_type  != "הכל": mask &= df["apt_type"]     == sel_type
 if sel_nb    != "הכל": mask &= df["neighborhood"] == sel_nb
-if sel_rooms != "הכל": mask &= df["rooms"]        == int(sel_rooms)
+# Room bucket: "5" = 5+ rooms, "4" = 4 or 4.5 rooms
+if sel_rooms == "5":   mask &= df["rooms"] >= 5
+else:                  mask &= (df["rooms"] >= 4) & (df["rooms"] < 5)
 if sel_floor != "הכל": mask &= df["floor"]        == int(sel_floor)
 fdf_raw = df[mask].copy()
 
@@ -716,12 +744,15 @@ fdf_dups.drop(columns="_lid", inplace=True, errors="ignore")
 avg_p   = int(fdf["price_num"].mean())    if len(fdf) else 0
 med_p   = int(fdf["price_num"].median())  if len(fdf) else 0
 min_p   = int(fdf["price_num"].min())     if len(fdf) else 0
-avg_sqm = fdf["size_sqm"].dropna().mean() if len(fdf) else 0
-ppsqm   = int(avg_p / avg_sqm)            if avg_sqm else 0
+# Price per m² = mean of each listing's price/size (average-of-ratios), matching
+# how the history files and trend charts compute it — so the KPI, the chart and
+# the "vs week" delta all agree. (avg-price ÷ avg-size gave a different number.)
+_valid_pps = fdf[(fdf["size_sqm"] > 0) & fdf["price_num"].notna()] if len(fdf) else fdf
+ppsqm   = int((_valid_pps["price_num"] / _valid_pps["size_sqm"]).mean()) if len(_valid_pps) else 0
 
 header_slot.markdown(f"""
 <div class="page-header">
-    <h1>סקירת שוק רעננה · 4 חדרים</h1>
+    <h1>סקירת שוק רעננה · {sel_rooms} חדרים</h1>
     <div class="sub">
         <b>{len(fdf):,}</b> מודעות &nbsp;·&nbsp; עודכן <b>{mod_age}</b> &nbsp;<span style="opacity:0.55">({mod_time})</span>
     </div>
@@ -783,23 +814,24 @@ def _kpi_delta(curr, ref):
     return f'<div class="kpi-delta {cls}">{arrow} {abs(pct):.1f}% מול שבוע</div>'
 
 ref_count = ref_avg = ref_med = ref_pps = None
-if len(history) > 0:
+# Baseline = the SAME room-count bucket ~7 days ago (rooms_history), so the KPI —
+# which now always reflects one room count (4 or 5) — compares like-for-like.
+_rh = rooms_hist[rooms_hist["rooms"] == sel_rooms] if len(rooms_hist) else rooms_hist
+if len(_rh) > 0:
     cutoff = pd.Timestamp.now() - pd.Timedelta(days=7)
-    past = history[history["date"] <= cutoff]
-    ref_row = past.iloc[-1] if len(past) else history.iloc[0]
-    ref_count = int(ref_row["כמות"]) if pd.notna(ref_row.get("כמות")) else None
-    ref_avg   = float(ref_row["avg_price"])         if "avg_price"         in ref_row and pd.notna(ref_row["avg_price"])         else None
-    ref_med   = float(ref_row["median_price"])      if "median_price"      in ref_row and pd.notna(ref_row["median_price"])      else None
-    ref_pps   = float(ref_row["avg_price_per_sqm"]) if "avg_price_per_sqm" in ref_row and pd.notna(ref_row["avg_price_per_sqm"]) else None
+    past = _rh[_rh["date"] <= cutoff]
+    ref_row = past.iloc[-1] if len(past) else _rh.iloc[0]
+    ref_count = int(ref_row["count"])               if pd.notna(ref_row.get("count"))             else None
+    ref_avg   = float(ref_row["avg_price"])         if pd.notna(ref_row.get("avg_price"))          else None
+    ref_med   = float(ref_row["median_price"])      if pd.notna(ref_row.get("median_price"))       else None
+    ref_pps   = float(ref_row["avg_price_per_sqm"]) if pd.notna(ref_row.get("avg_price_per_sqm"))  else None
 
-# The "vs week" baseline (ref_*) comes from the market-wide history file, so it
-# is only a valid comparison for the unfiltered view. When any filter is active
-# the KPI reflects a subset (e.g. one neighborhood) while the baseline is the
-# whole market — comparing them produced a bogus swing (e.g. 59 in one
-# neighborhood vs ~356 market-wide last week = a fake -83%). Hide the pills when
-# filtered; the value itself and the "תוצאות מסוננות" sub already signal the scope.
+# The room-count baseline above is valid for the plain 4/5 view. But if a FURTHER
+# filter (neighborhood, type, floor, price, size) is active, the KPI reflects a
+# sub-subset while the baseline is the whole bucket — comparing them is bogus, so
+# hide the pills. sel_rooms is intentionally excluded (it has its own baseline).
 is_filtered = (
-    sel_nb != "הכל" or sel_type != "הכל" or sel_rooms != "הכל" or sel_floor != "הכל"
+    sel_nb != "הכל" or sel_type != "הכל" or sel_floor != "הכל"
     or price_range != (price_min, price_max) or size_range != (size_min, size_max)
 )
 # A missing pill must still emit a non-blank line: an empty string here would
@@ -882,9 +914,19 @@ else:
     history_f = _within_range(history,   range_days)
     nb_hist_f = _within_range(nb_hist,   range_days)
     type_hist_f = _within_range(type_hist, range_days)
+    rooms_hist_f = _within_range(rooms_hist, range_days)
+    # Neighborhood/type history is now split by room bucket — keep only the
+    # selected room count so those charts honor the 4/5 toggle (no mixed line).
+    if len(nb_hist_f) and "rooms" in nb_hist_f.columns:
+        nb_hist_f = nb_hist_f[nb_hist_f["rooms"] == sel_rooms]
+    if len(type_hist_f) and "rooms" in type_hist_f.columns:
+        type_hist_f = type_hist_f[type_hist_f["rooms"] == sel_rooms]
 
     using_nb   = chart_nb   != "הכל" and len(nb_hist_f)   > 0
     using_type = chart_type != "הכל" and len(type_hist_f) > 0
+    rooms_src  = (rooms_hist_f[rooms_hist_f["rooms"] == sel_rooms].sort_values("date")
+                  if len(rooms_hist_f) else rooms_hist_f)
+    using_rooms = len(rooms_src) > 0
 
     if using_nb and using_type:
         # Both filters active: type drives both qty and price
@@ -903,14 +945,20 @@ else:
         qty_x, qty_y     = src["date"], src["count"]
         price_x, price_y = src["date"], src["avg_price_per_sqm"]
         scope_label = chart_type
+    elif using_rooms:
+        # Default view: the selected room-count's own trend line.
+        qty_x, qty_y     = rooms_src["date"], rooms_src["count"]
+        price_x, price_y = rooms_src["date"], rooms_src["avg_price_per_sqm"]
+        scope_label = f"{sel_rooms} חדרים"
     else:
         qty_x, qty_y     = history["date"], history["כמות"]
         price_x, price_y = history["date"], history["avg_price_per_sqm"]
-        scope_label = "כל השוק"
+        scope_label = f"{sel_rooms} חדרים"
 
-    # Narrowing filters that the pre-aggregated history files can't slice by
+    # Narrowing filters that the pre-aggregated history files can't slice by.
+    # (sel_rooms is NOT here — it has its own per-room-count history.)
     any_narrow_filter = (
-        sel_rooms != "הכל" or sel_floor != "הכל" or
+        sel_floor != "הכל" or
         price_range != (price_min, price_max) or
         size_range != (size_min, size_max)
     )
@@ -924,7 +972,7 @@ else:
     # ── Chart 1: Listing quantity over time ──────────────────────────────────────
     with gc1:
         qty_label = scope_label if not any_narrow_filter else f"{scope_label} · פילוח חי"
-        st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות 4-חדרים פעילות היו בכל יום. עלייה = יותר היצע, ירידה = פחות היצע (יותר נסגרו ממה שנפתחו).">ⓘ</span>כמות מודעות לאורך זמן</div><div class="card-desc">{qty_label}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות 4-5 חדרים פעילות היו בכל יום. עלייה = יותר היצע, ירידה = פחות היצע (יותר נסגרו ממה שנפתחו).">ⓘ</span>כמות מודעות לאורך זמן</div><div class="card-desc">{qty_label}</div>', unsafe_allow_html=True)
         if any_narrow_filter:
             # Pre-aggregated history can't be sliced by price/size/rooms/floor — show today's filtered count only
             st.markdown(
@@ -1003,8 +1051,8 @@ else:
                 dom_src = nb_hist_f[nb_hist_f["neighborhood"] == sel_nb]
             elif sel_type != "הכל" and "avg_active_dom" in type_hist_f.columns:
                 dom_src = type_hist_f[type_hist_f["apt_type"] == sel_type]
-            elif sel_nb == "הכל" and sel_type == "הכל" and "avg_active_dom" in history_f.columns:
-                dom_src = history_f
+            elif sel_nb == "הכל" and sel_type == "הכל" and len(rooms_src) and "avg_active_dom" in rooms_src.columns:
+                dom_src = rooms_src
         if dom_src is not None and len(dom_src):
             hd = dom_src.dropna(subset=["avg_active_dom"]).copy()
             hd["avg_active_dom"] = pd.to_numeric(hd["avg_active_dom"], errors="coerce")
@@ -1320,7 +1368,8 @@ else:
         m &= d["_sz"].fillna(size_range[0]).between(size_range[0], size_range[1])
         if sel_type  != "הכל" and "_tp" in d.columns: m &= d["_tp"] == sel_type
         if sel_nb    != "הכל" and "_nb" in d.columns: m &= d["_nb"] == sel_nb
-        if sel_rooms != "הכל": m &= d["_rm"] == int(sel_rooms)
+        if sel_rooms == "5": m &= d["_rm"] >= 5
+        else:                m &= (d["_rm"] >= 4) & (d["_rm"] < 5)
         if sel_floor != "הכל": m &= d["_fl"] == int(sel_floor)
         return d[m].drop(columns=["_pn","_sz","_rm","_fl","_nb","_tp"], errors="ignore")
 

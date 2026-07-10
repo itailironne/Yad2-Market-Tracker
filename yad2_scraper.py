@@ -12,7 +12,7 @@ for _stream in (sys.stdout, sys.stderr):
         except Exception:
             pass
 
-URL             = "https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-4"
+URL             = "https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-5"
 OUT             = os.path.dirname(os.path.abspath(__file__))
 JSON_FILE       = os.path.join(OUT, "yad2_raanana_4rooms.json")
 CSV_FILE        = os.path.join(OUT, "yad2_raanana_4rooms.csv")
@@ -27,8 +27,13 @@ FIRST_SEEN_FILE = os.path.join(OUT, "yad2_first_seen.json")
 DOM_LOG_FILE    = os.path.join(OUT, "yad2_dom_log.csv")
 NB_HISTORY_FILE   = os.path.join(OUT, "yad2_neighborhood_history.csv")
 TYPE_HISTORY_FILE = os.path.join(OUT, "yad2_type_history.csv")
+# Per-room-count time-series (bucket "4" = 4/4.5 rooms, "5" = 5+ rooms) so the
+# dashboard can show a clean 4-room OR 5-room view with its own trend lines.
+ROOMS_HISTORY_FILE = os.path.join(OUT, "yad2_rooms_history.csv")
 RUN_LOG_FILE      = os.path.join(OUT, "yad2_run_log.csv")
 DATE_POSTED_FILE  = os.path.join(OUT, "yad2_date_posted.json")
+# Per-listing consecutive-miss counters for grace-period removal detection.
+PENDING_REMOVALS_FILE = os.path.join(OUT, "yad2_pending_removals.json")
 # Dedicated Chrome profile that holds Radware Bot-Manager clearance cookies.
 # Warmed by a genuine (non-automated) Chrome before every run, then reused by
 # Playwright — see warm_clearance() and the launch_persistent_context() call.
@@ -39,7 +44,7 @@ PROFILE_DIR       = os.path.join(OUT, ".yad2_chrome_profile")
 # and clobber each other's output files, so only one may hold this lock.
 LOCK_FILE         = os.path.join(OUT, ".yad2_scraper.lock")
 
-# Pagination sanity threshold. Healthy Ra'anana 4-room scrapes hit 17-18 pages.
+# Pagination sanity threshold. Healthy Ra'anana 4-5-room scrapes hit 20+ pages.
 # A run that stops earlier almost always means Yad2 served a degraded page (bot
 # throttle): listings render but the "next" button is missing, so the scraper
 # silently exits with a fraction of the data. Raising on early stops lets
@@ -51,11 +56,29 @@ MIN_PAGES_FOR_TRUST = 10
 # threshold and falsely marked ~100 listings as removed. Real daily churn on a
 # stable search is <10%; anything beyond that warrants a retry.
 MIN_LISTINGS_FRACTION_VS_PREV = 0.9
+# Yad2's feed is unstable — boosted/promoted listings flap in and out between
+# runs, so a listing simply missing from ONE run is often still live (verified:
+# a listing absent from a scrape was confirmed active on yad2 minutes later).
+# Require this many CONSECUTIVE absent runs before logging a removal; any
+# reappearance cancels the pending removal. Kills false "removed" events that
+# were inflating the removed/absorption/DOM stats.
+REMOVAL_GRACE_RUNS = 2
 
 def parse_price_num(p):
     p = str(p).replace(",","").replace("\u20aa","").replace("\u20aa","").strip()
     m = re.search(r"(\d+)", p)
     return int(m.group(1)) if m else None
+
+def rooms_bucket(val):
+    """Map a listing's room count to the dashboard's two buckets: '4' (4 or 4.5
+    rooms) or '5' (5+ rooms). Returns '' for anything outside the scrape filter."""
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return ""
+    if n >= 5:   return "5"
+    if n >= 4:   return "4"
+    return ""
 
 def shift_saturday_to_friday(date_str):
     """If date_str (YYYY-MM-DD) falls on Saturday, return the previous Friday instead."""
@@ -267,14 +290,20 @@ def find_chrome_exe():
             return path
     return None
 
-def _pid_alive(pid):
-    """True if a process with this PID is currently running (Windows)."""
+def _scraper_process_alive(pid):
+    """True only if `pid` is a live process running THIS scraper. We check the
+    command line, not just that *some* process has this PID, because PIDs get
+    recycled: a crashed scraper's PID can be reused by an unrelated process (e.g.
+    the Streamlit dashboard), which would otherwise make the stale lock look
+    permanently held and silently block every scheduled/watchdog run."""
     try:
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                             capture_output=True, text=True, timeout=10).stdout
-        return str(pid) in out
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"],
+            capture_output=True, text=True, timeout=15).stdout
+        return "yad2_scraper" in out.lower()
     except Exception:
-        return True  # can't tell → assume alive so we don't steal a live lock
+        return False  # can't confirm a live scraper → let the caller steal the lock
 
 def acquire_single_instance_lock():
     """Return True if we now hold the run lock, False if another live scraper
@@ -288,7 +317,7 @@ def acquire_single_instance_lock():
                 pid = int((f.read().strip() or "0"))
         except Exception:
             pid = 0
-        if pid and pid != os.getpid() and _pid_alive(pid):
+        if pid and pid != os.getpid() and _scraper_process_alive(pid):
             return False
         try:
             os.remove(LOCK_FILE)                       # stale lock — reclaim it
@@ -591,7 +620,7 @@ async def run():
             if nb_ids:
                 print(f"Canonical neighborhood scrape: querying {len(nb_ids)} neighborhoods...")
                 for nb_name, nb_id in nb_ids.items():
-                    nb_url = f"https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-4&neighborhood={nb_id}"
+                    nb_url = f"https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-5&neighborhood={nb_id}"
                     nb_listing_ids = await collect_listing_ids_from_url(pg, nb_url)
                     for lid in nb_listing_ids:
                         canonical_nb_map[lid] = nb_name
@@ -711,6 +740,15 @@ async def run():
         except Exception:
             prev_map = {}
 
+    # Grace-period state: {listing_id: {"misses": n, "record": {...}, "first_seen": date}}
+    pending_removals = {}
+    if os.path.exists(PENDING_REMOVALS_FILE):
+        try:
+            with open(PENDING_REMOVALS_FILE, encoding="utf-8") as f:
+                pending_removals = json.load(f)
+        except Exception:
+            pending_removals = {}
+
     # Second-line defense: even if pagination didn't trip the early-stop guard,
     # a sudden ≥40% drop vs the previous run almost always means we missed
     # listings (silent partial scrape). Refuse to overwrite the baseline so
@@ -723,21 +761,52 @@ async def run():
             f"likely partial scrape. Refusing to save."
         )
 
-    new_ids     = set(curr_map) - set(prev_map)
-    removed_ids = set(prev_map) - set(curr_map)
-    common_ids  = set(prev_map) & set(curr_map)
+    curr_ids = set(curr_map)
+    prev_ids = set(prev_map)
+
+    # ── Grace-period removal detection ─────────────────────────────────────────
+    # A listing missing from a single run's feed is often still live (Yad2's feed
+    # flaps). Count consecutive misses; only confirm a removal after
+    # REMOVAL_GRACE_RUNS absences. Each pending entry carries the listing's
+    # last-known record + first_seen so it can still be logged once confirmed,
+    # after prev_run no longer contains it. A reappearance clears the pending
+    # state (and is not counted as a brand-new listing).
+    absent_now = (prev_ids | set(pending_removals)) - curr_ids
+    reappeared = set(pending_removals) & curr_ids
+
+    confirmed_removed = {}   # lid -> {"record": {...}, "first_seen": date}
+    still_pending     = {}
+    for lid in absent_now:
+        entry  = pending_removals.get(lid) or {}
+        misses = entry.get("misses", 0) + 1
+        record = entry.get("record") or prev_map.get(lid)
+        if record is None:
+            continue
+        fs = entry.get("first_seen") or first_seen.get(lid, today)
+        if misses >= REMOVAL_GRACE_RUNS:
+            confirmed_removed[lid] = {"record": record, "first_seen": fs}
+        else:
+            still_pending[lid] = {"misses": misses, "record": record, "first_seen": fs}
+    pending_removals = still_pending
+
+    removed_ids = set(confirmed_removed)
+    new_ids     = curr_ids - prev_ids - reappeared
+    common_ids  = curr_ids & prev_ids
+    if reappeared:
+        print(f"Grace period: {len(reappeared)} listing(s) reappeared (cancelled pending removal); "
+              f"{len(still_pending)} now pending, {len(confirmed_removed)} confirmed removed")
 
     # ── Add new IDs to first_seen ─────────────────────────────────────────────
     for lid in new_ids:
         if lid and lid not in first_seen:
             first_seen[lid] = today
 
-    # ── DOM log for removed listings ──────────────────────────────────────────
+    # ── DOM log for confirmed removed listings ────────────────────────────────
     dom_days_list = []
     dom_rows = []
-    for lid in removed_ids:
-        r  = prev_map[lid]
-        fs = first_seen.get(lid, today)
+    for lid, info in confirmed_removed.items():
+        r  = info["record"]
+        fs = info["first_seen"]
         try:
             dom = (datetime.strptime(today, "%Y-%m-%d") - datetime.strptime(fs, "%Y-%m-%d")).days
         except:
@@ -833,8 +902,9 @@ async def run():
                     avg_active_dom if avg_active_dom is not None else ""])
 
     # ── Per-listing active DOM (today − date_posted) for the breakdowns below ──
-    nb_active_doms   = defaultdict(list)
-    type_active_doms = defaultdict(list)
+    nb_active_doms    = defaultdict(list)
+    type_active_doms  = defaultdict(list)
+    rooms_active_doms = defaultdict(list)
     for r in listings:
         d = r.get("date_posted") or first_seen.get(extract_id_from_url(r.get("url","")), "")
         if not d:
@@ -847,58 +917,93 @@ async def run():
             continue
         nb  = extract_neighborhood(r.get("info",""))
         apt = str(r.get("info","")).split(",")[0].strip() or "דירה"
+        rb  = rooms_bucket(r.get("rooms"))
+        if not rb:
+            continue
         if nb:
-            nb_active_doms[nb].append(days)
-        type_active_doms[apt].append(days)
+            nb_active_doms[(nb, rb)].append(days)
+        type_active_doms[(apt, rb)].append(days)
+        rooms_active_doms[rb].append(days)
 
-    # ── Neighborhood history ───────────────────────────────────────────────────
+    # ── Neighborhood history (split by room bucket) ────────────────────────────
+    # Keyed by (neighborhood, rooms) so the dashboard's 4/5 toggle can show a
+    # neighborhood's own 4-room OR 5-room trend instead of a mixed line.
     nb_prices = defaultdict(list)
     nb_ppsqm  = defaultdict(list)
     for r in listings:
         nb = extract_neighborhood(r.get("info",""))
-        if not nb: continue
+        rb = rooms_bucket(r.get("rooms"))
+        if not nb or not rb: continue
         p = parse_price_num(r.get("price",""))
         try: s = float(r.get("size_sqm") or 0)
         except: s = 0
-        if p: nb_prices[nb].append(p)
-        if p and s: nb_ppsqm[nb].append(p / s)
+        if p: nb_prices[(nb, rb)].append(p)
+        if p and s: nb_ppsqm[(nb, rb)].append(p / s)
 
-    nb_cols = ["timestamp","neighborhood","avg_price","avg_price_per_sqm","count","avg_active_dom"]
+    nb_cols = ["timestamp","neighborhood","rooms","avg_price","avg_price_per_sqm","count","avg_active_dom"]
     ensure_csv_columns(NB_HISTORY_FILE, nb_cols)
     nb_exists = os.path.exists(NB_HISTORY_FILE)
     with open(NB_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not nb_exists:
             w.writerow(nb_cols)
-        for nb in nb_prices:
-            ppsqm_avg = round(sum(nb_ppsqm[nb]) / len(nb_ppsqm[nb])) if nb_ppsqm.get(nb) else 0
-            doms = nb_active_doms.get(nb, [])
+        for (nb, rb) in nb_prices:
+            ppsqm_avg = round(sum(nb_ppsqm[(nb, rb)]) / len(nb_ppsqm[(nb, rb)])) if nb_ppsqm.get((nb, rb)) else 0
+            doms = nb_active_doms.get((nb, rb), [])
             nb_dom = round(sum(doms) / len(doms), 1) if doms else ""
-            w.writerow([now, nb, round(sum(nb_prices[nb]) / len(nb_prices[nb])), ppsqm_avg, len(nb_prices[nb]), nb_dom])
+            w.writerow([now, nb, rb, round(sum(nb_prices[(nb, rb)]) / len(nb_prices[(nb, rb)])), ppsqm_avg, len(nb_prices[(nb, rb)]), nb_dom])
 
-    # ── Type history ─────────────────────────────────────────────────────────────
+    # ── Type history (split by room bucket) ──────────────────────────────────────
     type_prices = defaultdict(list)
     type_ppsqm  = defaultdict(list)
     for r in listings:
         apt = str(r.get("info","")).split(",")[0].strip() or "דירה"
+        rb  = rooms_bucket(r.get("rooms"))
+        if not rb: continue
         p = parse_price_num(r.get("price",""))
         try: s = float(r.get("size_sqm") or 0)
         except: s = 0
-        if p: type_prices[apt].append(p)
-        if p and s: type_ppsqm[apt].append(p / s)
+        if p: type_prices[(apt, rb)].append(p)
+        if p and s: type_ppsqm[(apt, rb)].append(p / s)
 
-    type_cols = ["timestamp","apt_type","avg_price","avg_price_per_sqm","count","avg_active_dom"]
+    type_cols = ["timestamp","apt_type","rooms","avg_price","avg_price_per_sqm","count","avg_active_dom"]
     ensure_csv_columns(TYPE_HISTORY_FILE, type_cols)
     type_exists = os.path.exists(TYPE_HISTORY_FILE)
     with open(TYPE_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not type_exists:
             w.writerow(type_cols)
-        for apt in type_prices:
-            ppsqm_avg = round(sum(type_ppsqm[apt]) / len(type_ppsqm[apt])) if type_ppsqm.get(apt) else 0
-            doms = type_active_doms.get(apt, [])
+        for (apt, rb) in type_prices:
+            ppsqm_avg = round(sum(type_ppsqm[(apt, rb)]) / len(type_ppsqm[(apt, rb)])) if type_ppsqm.get((apt, rb)) else 0
+            doms = type_active_doms.get((apt, rb), [])
             t_dom = round(sum(doms) / len(doms), 1) if doms else ""
-            w.writerow([now, apt, round(sum(type_prices[apt]) / len(type_prices[apt])), ppsqm_avg, len(type_prices[apt]), t_dom])
+            w.writerow([now, apt, rb, round(sum(type_prices[(apt, rb)]) / len(type_prices[(apt, rb)])), ppsqm_avg, len(type_prices[(apt, rb)]), t_dom])
+
+    # ── Rooms history (bucketed 4 vs 5) ──────────────────────────────────────────
+    rooms_prices = defaultdict(list)
+    rooms_ppsqm  = defaultdict(list)
+    for r in listings:
+        rb = rooms_bucket(r.get("rooms"))
+        if not rb: continue
+        p = parse_price_num(r.get("price",""))
+        try: s = float(r.get("size_sqm") or 0)
+        except: s = 0
+        if p: rooms_prices[rb].append(p)
+        if p and s: rooms_ppsqm[rb].append(p / s)
+
+    rooms_cols = ["timestamp","rooms","avg_price","median_price","avg_price_per_sqm","count","avg_active_dom"]
+    ensure_csv_columns(ROOMS_HISTORY_FILE, rooms_cols)
+    rooms_exists = os.path.exists(ROOMS_HISTORY_FILE)
+    with open(ROOMS_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        if not rooms_exists:
+            w.writerow(rooms_cols)
+        for rb in sorted(rooms_prices):
+            ps = sorted(rooms_prices[rb])
+            ppsqm_avg = round(sum(rooms_ppsqm[rb]) / len(rooms_ppsqm[rb])) if rooms_ppsqm.get(rb) else 0
+            doms = rooms_active_doms.get(rb, [])
+            r_dom = round(sum(doms) / len(doms), 1) if doms else ""
+            w.writerow([now, rb, round(sum(ps) / len(ps)), ps[len(ps)//2], ppsqm_avg, len(ps), r_dom])
 
     # ── Save files (write to temp then rename so a crash never zeros the file) ──
     import tempfile
@@ -925,6 +1030,8 @@ async def run():
         json.dump(listings, f, ensure_ascii=False, indent=2)
     with open(FIRST_SEEN_FILE, "w", encoding="utf-8") as f:
         json.dump(first_seen, f, ensure_ascii=False, indent=2)
+    with open(PENDING_REMOVALS_FILE, "w", encoding="utf-8") as f:
+        json.dump(pending_removals, f, ensure_ascii=False, indent=2)
 
     print(f"Saved: {len(listings)} listings")
     print(f"New: {len(new_ids)} | Removed: {len(removed_ids)} | Price cuts: {cuts} (avg {avg_cut_pct}%)")
