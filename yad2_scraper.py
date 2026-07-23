@@ -530,8 +530,15 @@ async def run():
                     rooms = floor = size = ""
                     m = re.search(r"(\d+(?:\.\d+)?)\s*\u05d7\u05d3\u05e8", line2)
                     if m: rooms = m.group(1)
-                    m = re.search(r"\u05e7\u05d5\u05de\u05d4[^\d]*(\d+)", line2)
-                    if m: floor = m.group(1)
+                    # Ground floor: yad2 writes "\u05e7\u05d5\u05de\u05d4 \u05e7\u05e8\u05e7\u05e2" (the word, not a digit),
+                    # so map it to "0" before the digit regex \u2014 otherwise the regex
+                    # skips past "\u05e7\u05e8\u05e7\u05e2" and grabs the sqm, which the guard below then
+                    # blanks, leaving ground-floor flats with no floor at all.
+                    if re.search(r"\u05e7\u05d5\u05de\u05d4[\s\u200e\u200f]*\u05e7\u05e8\u05e7\u05e2", line2):
+                        floor = "0"
+                    else:
+                        m = re.search(r"\u05e7\u05d5\u05de\u05d4[^\d]*(\d+)", line2)
+                        if m: floor = m.group(1)
                     m = re.search(r"(\d+)\s*\u05de\u05f4\u05e8", line2)
                     if m: size = m.group(1)
                     # If the "floor" we captured equals the size, the listing actually has no
@@ -851,10 +858,24 @@ async def run():
     survival_30d = round(len(still_alive) / len(old_ids) * 100, 1) if old_ids else None
 
     # ── Summary stats ─────────────────────────────────────────────────────────
-    prices = [parse_price_num(r["price"]) for r in listings]
+    # Stats and history aggregations use only sane listings — Yad2 data-entry
+    # typos (a ₪12,700 apartment, 10 m² or 11,526 m² sizes) would poison
+    # averages, min/max and price-per-m². The snapshot, diff and save below
+    # still keep every listing; this only cleans the derived statistics
+    # (mirrors the dashboard's display filter so both agree).
+    def _stats_sane(r):
+        p = parse_price_num(r.get("price", ""))
+        try: s = float(r.get("size_sqm") or 0)
+        except Exception: s = 0
+        if p is not None and p < 500_000: return False
+        if s and (s < 25 or s > 1000): return False
+        return True
+    stats_listings = [r for r in listings if _stats_sane(r)]
+
+    prices = [parse_price_num(r["price"]) for r in stats_listings]
     prices = [p for p in prices if p]
     sizes  = []
-    for r in listings:
+    for r in stats_listings:
         try:
             s = float(r["size_sqm"] or 0)
             p = parse_price_num(r["price"])
@@ -875,7 +896,7 @@ async def run():
     # avg DOM of currently active listings (today - date_posted, falling back to first_seen)
     active_doms = []
     today_dt = datetime.strptime(today, "%Y-%m-%d")
-    for r in listings:
+    for r in stats_listings:
         d = r.get("date_posted") or first_seen.get(extract_id_from_url(r.get("url", "")), "")
         if not d:
             continue
@@ -895,7 +916,7 @@ async def run():
             w.writerow(["timestamp","count","avg_price","median_price","min_price","max_price",
                         "avg_price_per_sqm","price_cuts","price_rises",
                         "avg_cut_pct","absorption_rate","survival_30d","avg_dom","avg_active_dom"])
-        w.writerow([now, len(listings), avg_price, median_price, min_price, max_price,
+        w.writerow([now, len(stats_listings), avg_price, median_price, min_price, max_price,
                     avg_ppsqm, cuts, rises, avg_cut_pct, absorption,
                     survival_30d if survival_30d is not None else "",
                     avg_dom if avg_dom is not None else "",
@@ -905,7 +926,7 @@ async def run():
     nb_active_doms    = defaultdict(list)
     type_active_doms  = defaultdict(list)
     rooms_active_doms = defaultdict(list)
-    for r in listings:
+    for r in stats_listings:
         d = r.get("date_posted") or first_seen.get(extract_id_from_url(r.get("url","")), "")
         if not d:
             continue
@@ -930,7 +951,7 @@ async def run():
     # neighborhood's own 4-room OR 5-room trend instead of a mixed line.
     nb_prices = defaultdict(list)
     nb_ppsqm  = defaultdict(list)
-    for r in listings:
+    for r in stats_listings:
         nb = extract_neighborhood(r.get("info",""))
         rb = rooms_bucket(r.get("rooms"))
         if not nb or not rb: continue
@@ -956,7 +977,7 @@ async def run():
     # ── Type history (split by room bucket) ──────────────────────────────────────
     type_prices = defaultdict(list)
     type_ppsqm  = defaultdict(list)
-    for r in listings:
+    for r in stats_listings:
         apt = str(r.get("info","")).split(",")[0].strip() or "דירה"
         rb  = rooms_bucket(r.get("rooms"))
         if not rb: continue
@@ -982,7 +1003,7 @@ async def run():
     # ── Rooms history (bucketed 4 vs 5) ──────────────────────────────────────────
     rooms_prices = defaultdict(list)
     rooms_ppsqm  = defaultdict(list)
-    for r in listings:
+    for r in stats_listings:
         rb = rooms_bucket(r.get("rooms"))
         if not rb: continue
         p = parse_price_num(r.get("price",""))

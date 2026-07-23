@@ -1,0 +1,217 @@
+<!-- Template for the "מגמות שכונות" page inside the dashboard.
+     yad2_dashboard.py injects live data (built from yad2_neighborhood_history.csv)
+     into the /*__DATA__*/{} placeholder and renders this via components.html. -->
+<title>מגמות שכונות · רעננה</title>
+<style>
+  :root{
+    --bg:#f5f8fc; --card:#ffffff; --ink:#0f1a2e; --muted:#5b6b82; --faint:#9aa8bd;
+    --line:#e6ecf4; --grid:#eef3f9; --brand:#2563eb; --brand2:#06b6d4;
+    --fast:#0e9f6e; --fast-bg:#e7f7f0; --mid:#2563eb; --mid-bg:#eaf1fe;
+    --slow:#c2701a; --slow-bg:#fbf1e4;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1200px 480px at 90% -10%, #eaf1ff 0%, rgba(234,241,255,0) 60%),
+      var(--bg);
+    color:var(--ink); direction:rtl;
+    font-family:"Segoe UI","Helvetica Neue",system-ui,-apple-system,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+    font-variant-numeric:tabular-nums;}
+  .wrap{max-width:1060px; margin:0 auto; padding:20px 22px 40px}
+  .eyebrow{display:inline-flex; align-items:center; gap:8px; font-size:.72rem; font-weight:700;
+    letter-spacing:.08em; color:var(--brand); background:#eaf1fe; border:1px solid #d7e4ff;
+    padding:5px 12px; border-radius:999px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--brand2))}
+  h1{font-size:clamp(1.6rem,4vw,2.2rem); font-weight:800; letter-spacing:-.02em; margin:14px 0 6px;
+    line-height:1.08; text-wrap:balance;
+    background:linear-gradient(100deg,#0f1a2e 30%,#1e40af); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent}
+  .sub{color:var(--muted); font-size:1rem; max-width:60ch}
+  .sub b{color:var(--ink); font-weight:700}
+
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:26px 0 24px}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px;
+    box-shadow:0 1px 2px rgba(15,26,46,.04)}
+  .stat .k{font-size:.72rem; font-weight:700; color:var(--muted); letter-spacing:.02em}
+  .stat .v{font-size:1.7rem; font-weight:800; letter-spacing:-.02em; margin-top:4px}
+  .stat .v small{font-size:.9rem; font-weight:600; color:var(--faint)}
+  .stat .n{font-size:.78rem; color:var(--faint); margin-top:2px}
+  .stat .v .up{color:var(--slow)} .stat .v .down{color:var(--fast)}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:18px;
+    box-shadow:0 1px 3px rgba(15,26,46,.05); padding:20px 22px; margin-bottom:22px}
+  .card > h2{font-size:1.05rem; font-weight:800; margin:0 0 2px; letter-spacing:-.01em}
+  .card > .desc{font-size:.85rem; color:var(--muted); margin:0 0 14px}
+  .hero-chart{width:100%; height:190px; display:block; direction:ltr}
+  .spark{direction:ltr}
+
+  .tbl-scroll{overflow-x:auto; margin:0 -22px; padding:0 22px}
+  table{border-collapse:collapse; width:100%; min-width:640px}
+  thead th{font-size:.7rem; font-weight:700; color:var(--muted); text-align:right;
+    padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap; letter-spacing:.02em}
+  thead th.num{text-align:center}
+  tbody td{padding:12px; border-bottom:1px solid var(--grid); vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover td{background:#f9fbfe}
+  .nb-name{font-weight:700; font-size:.95rem}
+  .nb-rank{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+    font-size:.7rem;font-weight:700;color:var(--faint)}
+  .cell{display:flex; align-items:center; gap:12px; justify-content:flex-start}
+  .big{font-size:1.15rem; font-weight:800; letter-spacing:-.02em; min-width:2.4ch; text-align:left}
+  .spark{flex:0 0 auto}
+  .chip{display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:700;
+    padding:3px 9px; border-radius:999px; white-space:nowrap}
+  .chip.fast{color:var(--fast); background:var(--fast-bg)}
+  .chip.mid{color:var(--mid); background:var(--mid-bg)}
+  .chip.slow{color:var(--slow); background:var(--slow-bg)}
+  .trend{font-size:.72rem; font-weight:700; margin-inline-start:2px}
+  .trend.up{color:var(--slow)} .trend.down{color:var(--fast)} .trend.flat{color:var(--faint)}
+  .ppsqm{font-weight:700; font-size:.92rem}
+  .ppsqm small{color:var(--faint); font-weight:600; font-size:.72rem}
+
+  .foot{color:var(--faint); font-size:.78rem; line-height:1.7; margin-top:8px}
+  .foot b{color:var(--muted)}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; margin:2px 0 14px; font-size:.75rem; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  @media(max-width:720px){ .stats{grid-template-columns:repeat(2,1fr)} }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow"><span class="dot"></span><span id="eyebrow-txt">מעקב שוק יד2 · רעננה</span></div>
+  <h1>מגמות שכונות: ימים בשוק ומלאי מודעות</h1>
+  <p class="sub" id="sub"></p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <h2>ממוצע ימים בשוק — כלל השכונות</h2>
+    <p class="desc" id="hero-desc"></p>
+    <svg class="hero-chart" id="hero" preserveAspectRatio="none" role="img" aria-label="מגמת ימים בשוק"></svg>
+  </div>
+
+  <div class="card">
+    <h2>שכונות לפי מלאי, מהירות מכירה ומחיר</h2>
+    <p class="desc">מדורג לפי כמות המודעות הפעילות. הקו הכחול = מגמת המלאי; הקו הצבעוני = מגמת הימים בשוק.</p>
+    <div class="legend">
+      <span><i style="background:var(--fast)"></i>מהיר · עד 90 ימים</span>
+      <span><i style="background:var(--mid)"></i>בינוני · 90–160</span>
+      <span><i style="background:var(--slow)"></i>איטי · מעל 160</span>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr>
+          <th>שכונה</th>
+          <th>מלאי מודעות (מגמה)</th>
+          <th>ימים בשוק (מגמה)</th>
+          <th class="num">מחיר למ״ר</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="foot" id="foot"></p>
+  </div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/{};
+
+const fmt = n => n==null ? "—" : n.toLocaleString("en-US");
+const tier = d => d==null ? "mid" : d<90 ? "fast" : d<=160 ? "mid" : "slow";
+const tierLabel = t => t==="fast" ? "מהיר" : t==="slow" ? "איטי" : "בינוני";
+const C = {fast:"#0e9f6e", mid:"#2563eb", slow:"#c2701a", brand:"#2563eb"};
+
+// ---- sparkline (normalized polyline + soft area + end dot) ----
+function spark(series, color, w=96, h=30){
+  const v = series.filter(x=>x!=null);
+  if(v.length<2) return `<svg class="spark" width="${w}" height="${h}"></svg>`;
+  const min=Math.min(...v), max=Math.max(...v), span=(max-min)||1, n=v.length;
+  const x=i=>i/(n-1)*(w-4)+2, y=val=>h-3-((val-min)/span)*(h-8);
+  let d="", area="";
+  v.forEach((val,i)=>{ const px=x(i).toFixed(1), py=y(val).toFixed(1);
+    d+=(i?"L":"M")+px+" "+py+" "; });
+  area = `M2 ${h-3} `+ v.map((val,i)=>"L"+x(i).toFixed(1)+" "+y(val).toFixed(1)).join(" ") + ` L${w-2} ${h-3} Z`;
+  const lx=x(n-1).toFixed(1), ly=y(v[n-1]).toFixed(1), id="g"+Math.random().toString(36).slice(2,7);
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".18"/>
+      <stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#${id})"/>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${lx}" cy="${ly}" r="2.6" fill="${color}"/></svg>`;
+}
+
+// ---- hero area chart with axis hints ----
+function heroChart(){
+  const svg=document.getElementById("hero");
+  const vals=DATA.market_dom_vals, days=DATA.market_dom_days;
+  if(!vals || vals.length<2){ return; }
+  const W=svg.clientWidth||900, H=190, padL=6, padR=6, padT=14, padB=26;
+  const min=Math.min(...vals)*0.96, max=Math.max(...vals)*1.02, span=(max-min)||1, n=vals.length;
+  const x=i=>padL+i/(n-1)*(W-padL-padR), y=v=>padT+(1-(v-min)/span)*(H-padT-padB);
+  let line="", area=`M${padL} ${H-padB} `;
+  vals.forEach((v,i)=>{ line+=(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)+" "; area+="L"+x(i).toFixed(1)+" "+y(v).toFixed(1)+" ";});
+  area+=`L${W-padR} ${H-padB} Z`;
+  const grid=[min,(min+max)/2,max].map(g=>`<line x1="${padL}" x2="${W-padR}" y1="${y(g).toFixed(1)}" y2="${y(g).toFixed(1)}" stroke="#eef3f9"/><text x="${padL}" y="${(y(g)-4).toFixed(1)}" fill="#9aa8bd" font-size="10">${Math.round(g)}</text>`).join("");
+  const lx=x(n-1).toFixed(1), ly=y(vals[n-1]).toFixed(1);
+  const fmtDay=s=>{const p=s.split("-");return p[2]+"/"+p[1];};
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.innerHTML=`<defs><linearGradient id="hg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#2563eb" stop-opacity=".16"/><stop offset="1" stop-color="#2563eb" stop-opacity="0"/></linearGradient></defs>
+    ${grid}
+    <path d="${area}" fill="url(#hg)"/>
+    <path d="${line}" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${lx}" cy="${ly}" r="4" fill="#2563eb" stroke="#fff" stroke-width="2"/>
+    <text x="${lx}" y="${(+ly-10).toFixed(1)}" fill="#0f1a2e" font-size="12" font-weight="700" text-anchor="end">${vals[n-1]} ימים</text>
+    <text x="${padL}" y="${H-8}" fill="#9aa8bd" font-size="10">${fmtDay(days[0])}</text>
+    <text x="${W-padR}" y="${H-8}" fill="#9aa8bd" font-size="10" text-anchor="end">${fmtDay(days[n-1])}</text>`;
+}
+
+function stats(){
+  const nb=DATA.neighborhoods;
+  const totalNow=DATA.market_count[DATA.market_count.length-1];
+  const domNow=DATA.market_dom_vals[DATA.market_dom_vals.length-1];
+  const domStart=DATA.market_dom_vals[0];
+  const dDom=Math.round((domNow-domStart)*10)/10;
+  const big=nb.filter(x=>x.count>=10);
+  const pool=big.length?big:nb;
+  const fast=pool.reduce((a,b)=>(b.dom??1e9)<(a.dom??1e9)?b:a);
+  const slow=pool.reduce((a,b)=>(b.dom??-1)>(a.dom??-1)?b:a);
+  const arrow=dDom>1?`<span class="up">▲ ${dDom}</span>`:dDom<-1?`<span class="down">▼ ${Math.abs(dDom)}</span>`:`—`;
+  document.getElementById("stats").innerHTML=[
+    [`מלאי פעיל · ${DATA.rooms_label}`, fmt(totalNow), nb.length+" שכונות"],
+    ["ממוצע ימים בשוק", `${domNow} <small>ימ׳</small>`, `${arrow} מול תחילת המעקב`],
+    ["השכונה המהירה", fast.name, `${fast.dom} ימים בממוצע`],
+    ["השכונה האיטית", slow.name, `${slow.dom} ימים בממוצע`],
+  ].map(([k,v,n])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+}
+
+function rows(){
+  const body=document.getElementById("rows");
+  body.innerHTML=DATA.neighborhoods.map((x,i)=>{
+    const t=tier(x.dom), col=C[t];
+    const showTrend=x.count>=10 && x.dom_delta!=null;
+    let tr="";
+    if(showTrend){ const d=x.dom_delta;
+      tr = d>3?`<span class="trend up">▲ ${d}</span>`:d<-3?`<span class="trend down">▼ ${Math.abs(d)}</span>`:`<span class="trend flat">≈</span>`; }
+    return `<tr>
+      <td><div class="cell"><span class="nb-rank">${i+1}</span><span class="nb-name">${x.name}</span></div></td>
+      <td><div class="cell"><span class="big">${x.count}</span>${spark(x.count_series, C.brand)}</div></td>
+      <td><div class="cell"><span class="chip ${t}">${x.dom??"—"} · ${tierLabel(t)}</span>${spark(x.dom_series, col)}${tr}</div></td>
+      <td style="text-align:center"><span class="ppsqm">₪${fmt(x.ppsqm)}<br><small>למ״ר</small></span></td>
+    </tr>`;
+  }).join("");
+}
+
+document.getElementById("eyebrow-txt").textContent = `מעקב שוק יד2 · רעננה · דירות ${DATA.rooms_label}`;
+document.getElementById("hero-desc").textContent =
+  `DOM ממוצע (משוקלל לפי מלאי) של דירות ${DATA.rooms_label} פעילות, לאורך תקופת המעקב.`;
+document.getElementById("sub").innerHTML =
+  `ניתוח <b>${DATA.neighborhoods.length} שכונות</b> ברעננה על פני <b>${DATA.days.length} ימי מעקב</b> (${DATA.days[0].split("-").reverse().join("/")}–${DATA.days[DATA.days.length-1].split("-").reverse().join("/")}). איזו שכונה מוכרת מהר, איפה המלאי גדל, ואיפה הדירות נתקעות.`;
+document.getElementById("foot").innerHTML =
+  `מקור: <b>yad2_neighborhood_history.csv</b> · מגמת הימים בשוק מוצגת רק לשכונות עם ≥10 מודעות (מדגם קטן = רעש). ` +
+  `הערה: ב־08/07 הורחב המעקב ל־4–5 חדרים ושיוך השכונות דויק, מה שמשפיע על השוואות המלאי בימים האחרונים. עודכן ${DATA.generated}.`;
+
+stats(); rows(); heroChart();
+window.addEventListener("resize", heroChart);
+</script>

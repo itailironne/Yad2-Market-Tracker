@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.graph_objects as go
 import json, os, re
@@ -622,6 +623,94 @@ def load_dom_log():
         return pd.DataFrame()
     return pd.read_csv(path, encoding="utf-8-sig")
 
+def build_trends_payload(cur_df, nbh, rooms_sel):
+    """Live data for the 'מגמות שכונות' page. Sparkline series come from the
+    per-(neighborhood × room) history; the CURRENT table values (count, DOM,
+    price/m²) are recomputed from the sanity-filtered snapshot so this page
+    always agrees with the main dashboard's KPIs (history rows written before
+    the sanity filter existed carry typo-inflated price/m²)."""
+    if len(nbh) == 0 or "rooms" not in nbh.columns:
+        return None
+    h = nbh[nbh["rooms"] == rooms_sel].copy()
+    if len(h) == 0:
+        return None
+    h["day"] = h["timestamp"].astype(str).str[:10]
+    h["dom_num"] = pd.to_numeric(h["avg_active_dom"], errors="coerce")
+
+    if rooms_sel == "5":
+        cur = cur_df[cur_df["rooms"] >= 5]
+    else:
+        cur = cur_df[(cur_df["rooms"] >= 4) & (cur_df["rooms"] < 5)]
+    # Drop blanks and the city-name leak ("דירה, רעננה" with no neighborhood
+    # makes the 2nd info part the city itself — not a real neighborhood).
+    cur = cur[~cur["neighborhood"].isin(["", "רעננה"])]
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    all_days = sorted(set(h["day"]))
+    out = []
+    for name, grp in cur.groupby("neighborhood"):
+        count = int(len(grp))
+        if count < 3:
+            continue                      # tiny samples are noise
+        doms = grp["ימים_בשוק"].dropna()
+        doms = doms[doms >= 0]
+        dom = round(float(doms.mean()), 1) if len(doms) else None
+        pp = grp[(grp["size_sqm"] > 0) & grp["price_num"].notna()]
+        ppsqm = int((pp["price_num"] / pp["size_sqm"]).mean()) if len(pp) else None
+
+        hh = h[h["neighborhood"] == name].sort_values("date")
+        day_count = hh.groupby("day")["count"].last()
+        day_dom   = hh.groupby("day")["dom_num"].mean().dropna()
+        cser = [int(v) for v in day_count.values]
+        dser = [round(float(v), 1) for v in day_dom.values]
+        # The snapshot is the truth for "now": replace/append today's point so
+        # the sparkline endpoint equals the number shown beside it.
+        if len(cser) and day_count.index[-1] == today_str: cser[-1] = count
+        else: cser.append(count)
+        if dom is not None:
+            if len(dser) and len(day_dom) and day_dom.index[-1] == today_str: dser[-1] = dom
+            else: dser.append(dom)
+        base_c = cser[0] if len(cser) < 8 else cser[-8]
+        dom_delta = None
+        if dom is not None and len(dser) >= 2:
+            base_d = dser[0] if len(dser) < 8 else dser[-8]
+            dom_delta = round(dom - base_d, 1)
+        out.append({"name": name, "count": count, "count_series": cser,
+                    "count_delta": count - base_c, "dom": dom, "dom_series": dser,
+                    "dom_delta": dom_delta, "ppsqm": ppsqm})
+    if not out:
+        return None
+    out.sort(key=lambda x: -x["count"])
+
+    # Market-wide series: inventory-weighted DOM + total count per day
+    hv = h.dropna(subset=["dom_num"])
+    wsum = (hv["dom_num"] * hv["count"]).groupby(hv["day"]).sum()
+    csum = hv.groupby("day")["count"].sum()
+    mdom = (wsum / csum).round(1)
+    mcount = h.groupby("day")["count"].sum()
+    mc = [int(v) for v in mcount.values]
+    total_now = sum(x["count"] for x in out)
+    if len(mc) and mcount.index[-1] == today_str: mc[-1] = total_now
+    else:
+        mc.append(total_now)
+        if all_days and all_days[-1] != today_str: all_days.append(today_str)
+    mdom_days = list(mdom.index)
+    mdom_vals = [float(v) for v in mdom.values]
+    cur_doms = [(x["dom"], x["count"]) for x in out if x["dom"] is not None]
+    if cur_doms:
+        wd = round(sum(d * c for d, c in cur_doms) / sum(c for _, c in cur_doms), 1)
+        if mdom_days and mdom_days[-1] == today_str: mdom_vals[-1] = wd
+        else: mdom_days.append(today_str); mdom_vals.append(wd)
+    return {
+        "generated": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "rooms_label": f"{rooms_sel} חדרים",
+        "days": all_days,
+        "neighborhoods": out,
+        "market_count": mc,
+        "market_dom_days": mdom_days,
+        "market_dom_vals": mdom_vals,
+    }
+
 # ── Load data ────────────────────────────────────────────────────────────────────
 _mtime    = os.path.getmtime(DATA_FILE)
 df        = load_current(_mtime)
@@ -650,6 +739,26 @@ def _hebrew_age(dt):
     return dt.strftime("%d/%m/%Y")
 
 mod_age = _hebrew_age(datetime.fromtimestamp(os.path.getmtime(DATA_FILE)))
+
+# ── Page navigation: main dashboard ⇄ neighborhood-trends analysis ───────────────
+_page = st.radio("עמוד", ["📊 סקירת שוק", "🏘️ מגמות שכונות"], horizontal=True,
+                 label_visibility="collapsed", key="page_nav")
+if "מגמות שכונות" in _page:
+    trends_rooms = st.radio("חדרים", ["4", "5"], horizontal=True,
+                            format_func=lambda r: f"{r} חדרים",
+                            label_visibility="collapsed", key="trends_rooms")
+    _payload = build_trends_payload(df, nb_hist, trends_rooms)
+    _tpl_path = os.path.join(DATA_DIR, "yad2_trends_page.html")
+    if _payload is None:
+        st.info("אין עדיין מספיק נתונים היסטוריים לעמוד זה — הוא ייבנה עם הריצות הבאות.")
+    elif not os.path.exists(_tpl_path):
+        st.error("קובץ התבנית yad2_trends_page.html חסר.")
+    else:
+        with open(_tpl_path, encoding="utf-8") as _f:
+            _tpl = _f.read()
+        components.html(_tpl.replace("/*__DATA__*/{}", json.dumps(_payload, ensure_ascii=False)),
+                        height=2350, scrolling=True)
+    st.stop()
 
 # ── Page header (placeholder — filled below once fdf is known) ───────────────────
 header_slot = st.empty()
