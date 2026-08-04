@@ -309,3 +309,41 @@ Call log:
 2026-07-23 11:00,success,33,644,1,4,0,0,0,3978152,3650000,675000,21000000,28345,0.59,36.7,30.8,
 2026-07-23 12:17,success,33,685,3,6,1,0,0.25,3968569,3650000,670000,21000000,28243,0.93,39.2,45.5,
 2026-07-23 21:32,success,33,720,9,2,2,0,3.23,3984539,3650000,670000,21000000,28253,0.29,40.6,16.0,
+2026-07-25 21:56,success,33,664,4,1,1,0,1.05,3970862,3650000,670000,21000000,28167,0.14,37.2,17.0,
+2026-07-25 22:35,success,33,630,1,10,0,0,0,3963669,3650000,670000,21000000,28291,1.51,35.3,34.1,
+2026-07-26 08:11,success,33,712,8,7,0,0,0,3992949,3690000,670000,21000000,28298,1.11,39.4,36.9,
+2026-07-26 09:00,success,33,700,6,0,0,0,0,3980041,3650000,670000,21000000,28167,0.0,38.9,,
+2026-07-26 22:00,success,35,668,7,1,3,0,4.81,4008799,3690000,670000,21000000,28158,0.14,36.8,19.0,
+2026-07-27 12:49,success,33,714,3,5,7,0,3.3,3976116,3650000,670000,21000000,28166,0.75,39.7,33.4,
+2026-07-27 13:12,success,33,711,0,3,0,0,0,3970073,3650000,670000,21000000,28272,0.42,39.2,20.0,
+2026-07-28 10:00,success,33,681,7,10,5,0,2.54,3965090,3650000,670000,21000000,28288,1.41,38.0,47.3,
+2026-07-28 21:25,success,33,645,13,8,2,0,4.98,3988241,3650000,670000,21000000,28203,1.17,34.6,42.2,
+2026-07-29 15:22,success,33,710,10,5,2,0,3.28,3969919,3650000,670000,21000000,28187,0.78,40.2,81.2,
+2026-07-29 20:21,success,38,701,7,8,1,1,3.04,3956719,3650000,670000,21000000,28185,1.13,39.9,59.8,
+2026-07-30 11:04,success,34,703,7,3,0,1,0,3956130,3650000,670000,21000000,28142,0.43,40.2,66.0,
+2026-08-02 10:12,success,34,651,9,11,2,1,4.72,3938857,3650000,670000,12900000,28088,1.56,36.2,31.3,
+2026-08-02 10:48,success,34,711,8,10,1,0,1.73,3962608,3650000,670000,21000000,28134,1.54,39.4,56.4,
+2026-08-02 11:20,success,35,655,0,1,0,0,0,3951568,3650000,670000,21000000,28086,0.14,36.8,0.0,
+2026-08-02 11:55,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=14368
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=14368
+  - [pid=14368] <gracefully close start>
+  - [pid=14368] <kill>
+  - [pid=14368] <will force kill>
+  - [pid=14368] taskkill stderr: ERROR: The process ""14368"" not found.
+  - [pid=14368] <process did exit: exitCode=21, signal=null>
+  - [pid=14368] starting temporary directories cleanup
+  - [pid=14368] finished temporary directories cleanup
+  - [pid=14368] <gracefully close end>
+"
+2026-08-02 11:51,success,34,703,0,1,0,0,0,3981193,3650000,670000,21000000,28128,0.15,39.1,34.0,
+2026-08-02 21:08,success,34,640,10,9,8,0,4.77,3973926,3650000,670000,21000000,28084,1.28,36.0,36.7,
+2026-08-03 11:59,success,34,687,9,8,0,0,0,3976742,3650000,670000,21000000,28126,1.25,37.7,46.5,
+2026-08-03 18:05,success,34,664,10,18,2,0,2.49,3985795,3650000,670000,21000000,28111,2.62,34.8,62.5,
+2026-08-03 20:38,success,34,704,17,18,0,0,0,3965197,3650000,670000,21000000,28035,2.71,38.0,60.0,
+2026-08-04 07:22,success,33,721,13,2,0,0,0,3940590,3650000,670000,21000000,28079,0.28,39.6,65.0,

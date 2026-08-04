@@ -1,0 +1,2 @@
+﻿timestamp,status,pages_scraped,total_listings,new_listings,removed_listings,price_cuts,price_rises,avg_cut_pct,avg_price,median_price,min_price,max_price,avg_price_per_sqm,absorption_rate,survival_30d,avg_dom,error
+2026-08-04 09:09,success,5,194,194,0,0,0,0,10106,9200,2600,19500,70,0,,,
