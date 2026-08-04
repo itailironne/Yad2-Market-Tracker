@@ -1,4 +1,5 @@
 import asyncio, json, csv, os, re, sys, subprocess, time
+from dataclasses import dataclass
 from playwright.async_api import async_playwright
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -12,31 +13,100 @@ for _stream in (sys.stdout, sys.stderr):
         except Exception:
             pass
 
-URL             = "https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-5"
-OUT             = os.path.dirname(os.path.abspath(__file__))
-JSON_FILE       = os.path.join(OUT, "yad2_raanana_4rooms.json")
-CSV_FILE        = os.path.join(OUT, "yad2_raanana_4rooms.csv")
-HISTORY_FILE    = os.path.join(OUT, "yad2_history.csv")
-PREV_FILE       = os.path.join(OUT, "yad2_prev_run.json")
-# Snapshot of the run BEFORE the current one, kept so the dashboard can show
-# "what changed in the most recent run". PREV_FILE gets overwritten with the
-# current run at the end of every scrape (it is the baseline for the NEXT run's
-# diff), so the dashboard needs this separate, one-step-behind copy.
-DISPLAY_PREV_FILE = os.path.join(OUT, "yad2_prev_display.json")
-FIRST_SEEN_FILE = os.path.join(OUT, "yad2_first_seen.json")
-DOM_LOG_FILE    = os.path.join(OUT, "yad2_dom_log.csv")
-NB_HISTORY_FILE   = os.path.join(OUT, "yad2_neighborhood_history.csv")
-TYPE_HISTORY_FILE = os.path.join(OUT, "yad2_type_history.csv")
-# Per-room-count time-series (bucket "4" = 4/4.5 rooms, "5" = 5+ rooms) so the
-# dashboard can show a clean 4-room OR 5-room view with its own trend lines.
-ROOMS_HISTORY_FILE = os.path.join(OUT, "yad2_rooms_history.csv")
-RUN_LOG_FILE      = os.path.join(OUT, "yad2_run_log.csv")
-DATE_POSTED_FILE  = os.path.join(OUT, "yad2_date_posted.json")
-# Per-listing consecutive-miss counters for grace-period removal detection.
-PENDING_REMOVALS_FILE = os.path.join(OUT, "yad2_pending_removals.json")
+OUT      = os.path.dirname(os.path.abspath(__file__))
+CITY_ID  = "8700"   # Ra'anana
+ROOMS_QS = "rooms=4-5"
+
+@dataclass(frozen=True)
+class DealConfig:
+    """Everything that differs between the two Yad2 feeds we track (for-sale
+    vs. rental). Sale and rent are separate feeds requiring independent
+    pagination/scraping — not a value-split of one feed the way the 4-vs-5
+    room bucket is — so each gets its own full set of output files. Rent
+    prices are ~100-1000x smaller than sale prices (₪ thousands/month vs ₪
+    millions), so min_sane_price/min_pages_for_trust must differ per leg too
+    or rent data gets filtered out entirely / false-flagged as a bot-block."""
+    key: str                    # "sale" | "rent" — used in prints/logs
+    feed_path: str              # "forsale" | "rent" — Yad2 URL path segment
+    url: str
+    json_file: str
+    csv_file: str
+    history_file: str
+    prev_file: str
+    display_prev_file: str
+    first_seen_file: str
+    date_posted_file: str
+    pending_removals_file: str
+    dom_log_file: str
+    nb_history_file: str
+    type_history_file: str
+    rooms_history_file: str
+    run_log_file: str
+    min_pages_for_trust: int    # pagination sanity threshold, see SALE/RENT_CFG
+    min_sane_price: int         # stats/display outlier floor, see SALE/RENT_CFG
+
+def _rent_name(base_filename):
+    root, ext = os.path.splitext(base_filename)
+    return f"{root}_rent{ext}"
+
+SALE_CFG = DealConfig(
+    key="sale", feed_path="forsale",
+    url=f"https://www.yad2.co.il/realestate/forsale?city={CITY_ID}&{ROOMS_QS}",
+    json_file=os.path.join(OUT, "yad2_raanana_4rooms.json"),
+    csv_file=os.path.join(OUT, "yad2_raanana_4rooms.csv"),
+    history_file=os.path.join(OUT, "yad2_history.csv"),
+    prev_file=os.path.join(OUT, "yad2_prev_run.json"),
+    display_prev_file=os.path.join(OUT, "yad2_prev_display.json"),
+    first_seen_file=os.path.join(OUT, "yad2_first_seen.json"),
+    date_posted_file=os.path.join(OUT, "yad2_date_posted.json"),
+    pending_removals_file=os.path.join(OUT, "yad2_pending_removals.json"),
+    dom_log_file=os.path.join(OUT, "yad2_dom_log.csv"),
+    nb_history_file=os.path.join(OUT, "yad2_neighborhood_history.csv"),
+    type_history_file=os.path.join(OUT, "yad2_type_history.csv"),
+    rooms_history_file=os.path.join(OUT, "yad2_rooms_history.csv"),
+    run_log_file=os.path.join(OUT, "yad2_run_log.csv"),
+    # Healthy Ra'anana 4-5-room SALE scrapes hit 20+ pages; a run that stops
+    # earlier almost always means Yad2 served a degraded/bot-throttled page.
+    min_pages_for_trust=10,
+    # Sale asking prices are always well above this; anything lower is a
+    # data-entry typo (e.g. a ₪12,700 "price"), not a real listing.
+    min_sane_price=500_000,
+)
+
+RENT_CFG = DealConfig(
+    key="rent", feed_path="rent",
+    url=f"https://www.yad2.co.il/realestate/rent?city={CITY_ID}&{ROOMS_QS}",
+    json_file=os.path.join(OUT, _rent_name("yad2_raanana_4rooms.json")),
+    csv_file=os.path.join(OUT, _rent_name("yad2_raanana_4rooms.csv")),
+    history_file=os.path.join(OUT, _rent_name("yad2_history.csv")),
+    prev_file=os.path.join(OUT, _rent_name("yad2_prev_run.json")),
+    display_prev_file=os.path.join(OUT, _rent_name("yad2_prev_display.json")),
+    first_seen_file=os.path.join(OUT, _rent_name("yad2_first_seen.json")),
+    date_posted_file=os.path.join(OUT, _rent_name("yad2_date_posted.json")),
+    pending_removals_file=os.path.join(OUT, _rent_name("yad2_pending_removals.json")),
+    dom_log_file=os.path.join(OUT, _rent_name("yad2_dom_log.csv")),
+    nb_history_file=os.path.join(OUT, _rent_name("yad2_neighborhood_history.csv")),
+    type_history_file=os.path.join(OUT, _rent_name("yad2_type_history.csv")),
+    rooms_history_file=os.path.join(OUT, _rent_name("yad2_rooms_history.csv")),
+    run_log_file=os.path.join(OUT, _rent_name("yad2_run_log.csv")),
+    # Ra'anana's 4-5-room rental inventory is much smaller than sale's:
+    # _probe_rent_feed.py measured 8 real pages (vs sale's 20+). Threshold set
+    # with headroom below that for normal day-to-day inventory dips (reusing
+    # sale's threshold of 10 here would make every healthy rent run look like
+    # a bot-block, since rent never reaches 10 pages at all).
+    min_pages_for_trust=5,
+    # Placeholder — real 4-5 room monthly rent in Ra'anana is roughly
+    # ₪3,000-15,000. Re-tune after seeing real scraped data.
+    min_sane_price=1_500,
+)
+DEAL_CONFIGS = [SALE_CFG, RENT_CFG]
+
 # Dedicated Chrome profile that holds Radware Bot-Manager clearance cookies.
 # Warmed by a genuine (non-automated) Chrome before every run, then reused by
 # Playwright — see warm_clearance() and the launch_persistent_context() call.
+# Shared across both legs: clearance cookies are domain-level (yad2.co.il),
+# not path-specific, so warming once (on the sale URL) also clears the rent
+# path — no need to pay the ~40s+ visible-Chrome warm-up twice.
 PROFILE_DIR       = os.path.join(OUT, ".yad2_chrome_profile")
 # Single-instance lock. The scraper is launched from three places (the 08:00/
 # 20:00 scheduled tasks, the hourly watchdog, and manual runs). Two runs at once
@@ -44,12 +114,6 @@ PROFILE_DIR       = os.path.join(OUT, ".yad2_chrome_profile")
 # and clobber each other's output files, so only one may hold this lock.
 LOCK_FILE         = os.path.join(OUT, ".yad2_scraper.lock")
 
-# Pagination sanity threshold. Healthy Ra'anana 4-5-room scrapes hit 20+ pages.
-# A run that stops earlier almost always means Yad2 served a degraded page (bot
-# throttle): listings render but the "next" button is missing, so the scraper
-# silently exits with a fraction of the data. Raising on early stops lets
-# run_with_retry kick in and avoids overwriting prev_run with a partial snapshot.
-MIN_PAGES_FOR_TRUST = 10
 # If the new run has fewer than this fraction of the previous run's listings,
 # refuse to overwrite the baseline files — likely a partial scrape. Tightened
 # from 0.6 → 0.9 after a 2026-05-17 run (262/363 = 72%) slipped past the old
@@ -389,19 +453,23 @@ async def _launch_profile_context(p):
     return context
 
 
-async def ensure_radware_clearance(p, warm_waits=(40, 55, 70)):
+async def ensure_radware_clearance(p, url, warm_waits=(40, 55, 70)):
     """Warm the profile with a genuine Chrome and confirm the clearance actually
     took before the real scrape starts. A fresh-profile Radware challenge is
     non-deterministic — one warm occasionally isn't enough — so we verify with a
     throwaway context and re-warm (longer each time) until the feed renders.
-    Raises if it never clears, letting run_with_retry back off and try later."""
+    Raises if it never clears, letting the caller back off and try later.
+
+    Clearance cookies are domain-level (yad2.co.il), not path-specific, so
+    warming against ANY yad2 URL (typically the sale feed) also clears every
+    other path — callers don't need to re-warm per deal type."""
     for attempt, wait_s in enumerate(warm_waits, 1):
-        warm_clearance(URL, wait_s=wait_s)
+        warm_clearance(url, wait_s=wait_s)
         ctx = await _launch_profile_context(p)
         cleared = False
         try:
             pg = ctx.pages[0] if ctx.pages else await ctx.new_page()
-            await pg.goto(URL, timeout=60000, wait_until="domcontentloaded")
+            await pg.goto(url, timeout=60000, wait_until="domcontentloaded")
             try:
                 await pg.wait_for_selector("[class*=feedItemBox]", timeout=15000)
             except Exception:
@@ -418,317 +486,316 @@ async def ensure_radware_clearance(p, warm_waits=(40, 55, 70)):
     )
 
 
-async def run():
-    # ── Shared state needed both inside and after the browser block ───────────
-    if os.path.exists(FIRST_SEEN_FILE):
-        with open(FIRST_SEEN_FILE, encoding="utf-8") as f:
-            first_seen = json.load(f)
-    else:
-        first_seen = {}
-    now   = datetime.now().strftime("%Y-%m-%d %H:%M")
-    today = shift_saturday_to_friday(datetime.now().strftime("%Y-%m-%d"))
+async def run_leg(p, cfg, first_seen, today):
+    """Scrape one deal-type leg (sale or rent) via the already-warmed shared
+    Playwright driver `p`. Opens/closes its own browser context so no
+    response-listener/page state bleeds into the other leg. Returns
+    (listings, pnum) — does not touch any output file; see finalize_leg()
+    for the diff/stats/save step. May raise (bot-block, click failure) —
+    the caller (run_leg_with_retry) handles retry/backoff."""
+    # Reuse the shared warmed profile for the actual scrape.
+    context = await _launch_profile_context(p)
+    pg = context.pages[0] if context.pages else await context.new_page()
+    listings = []
+    seen_urls = set()
+    pnum = 1
+    intercepted_dates = {}  # listing_id -> date_str
 
-    async with async_playwright() as p:
-        # Warm the profile with a genuine Chrome and confirm Radware clearance
-        # took (re-warming if a fresh-profile challenge needs longer) BEFORE the
-        # real scrape context opens, so pagination never dies on the challenge.
-        await ensure_radware_clearance(p)
-
-        # Reuse the now-cleared profile for the actual scrape.
-        context = await _launch_profile_context(p)
-        pg = context.pages[0] if context.pages else await context.new_page()
-        listings = []
-        seen_urls = set()
-        pnum = 1
-        intercepted_dates = {}  # listing_id -> date_str
-
-        # ── Intercept API responses to capture dates during feed load ─────────
-        async def _on_response(response):
-            if response.status != 200:
-                return
-            if "yad2.co.il" not in response.url:
-                return
-            if "json" not in response.headers.get("content-type", ""):
-                return
-            try:
-                body = await response.json()
-                extract_dates_from_json(body, intercepted_dates)
-            except Exception:
-                pass
-        pg.on("response", _on_response)
-
-        print(datetime.now().strftime("%Y-%m-%d %H:%M"), "- Starting Yad2 scrape...")
-        await pg.goto(URL, timeout=60000, wait_until="domcontentloaded")
-        # Wait for the feed to render, then confirm Radware clearance held. If the
-        # warm-up cookies expired or failed we stay on the "Radware Page" challenge
-        # with no cards — fail fast so run_with_retry re-warms and retries instead
-        # of silently "stopping at page 1" and saving a partial snapshot.
+    # ── Intercept API responses to capture dates during feed load ─────────
+    async def _on_response(response):
+        if response.status != 200:
+            return
+        if "yad2.co.il" not in response.url:
+            return
+        if "json" not in response.headers.get("content-type", ""):
+            return
         try:
-            await pg.wait_for_selector("[class*=feedItemBox]", timeout=15000)
+            body = await response.json()
+            extract_dates_from_json(body, intercepted_dates)
         except Exception:
             pass
-        if "Radware" in (await pg.title()):
-            await context.close()
-            raise RuntimeError(
-                "Radware challenge not cleared after warm-up (still on challenge "
-                "page); will retry with a fresh warm."
-            )
-        while True:
-            print("  Page", pnum)
-            await pg.wait_for_timeout(2000)
+    pg.on("response", _on_response)
 
-            # Extract dates from React fiber state on this page (zero extra requests)
-            try:
-                fiber_dates = await pg.evaluate("""() => {
-                    const results = {};
-                    document.querySelectorAll("[class*='feedItemBox']").forEach(card => {
-                        const fk = Object.keys(card).find(k => k.startsWith('__reactFiber'));
-                        if (!fk) return;
-                        let fiber = card[fk];
-                        for (let i = 0; i < 50 && fiber; i++) {
-                            try {
-                                const p = fiber.memoizedProps || {};
-                                const src = [p, p.data, p.listing, p.item, p.feedItem, p.adData].filter(Boolean);
-                                for (const obj of src) {
-                                    const id = obj.token || obj.id || obj.orderId;
-                                    const dt = obj.date || obj.date_added || obj.publishDate ||
-                                               obj.feedDate || obj.listingDate || obj.postedAt ||
-                                               obj.created_at || obj.updated_at;
-                                    if (id && dt) { results[String(id)] = String(dt); break; }
-                                }
-                            } catch(e) {}
-                            fiber = fiber.return;
-                        }
-                    });
-                    return results;
-                }""")
-                intercepted_dates.update(fiber_dates or {})
-            except:
-                pass
+    print(datetime.now().strftime("%Y-%m-%d %H:%M"), f"- Starting Yad2 {cfg.key} scrape...")
+    await pg.goto(cfg.url, timeout=60000, wait_until="domcontentloaded")
+    # Wait for the feed to render, then confirm Radware clearance held. If the
+    # warm-up cookies expired or failed we stay on the "Radware Page" challenge
+    # with no cards — fail fast so run_leg_with_retry re-warms and retries
+    # instead of silently "stopping at page 1" and saving a partial snapshot.
+    try:
+        await pg.wait_for_selector("[class*=feedItemBox]", timeout=15000)
+    except Exception:
+        pass
+    if "Radware" in (await pg.title()):
+        await context.close()
+        raise RuntimeError(
+            f"[{cfg.key}] Radware challenge not cleared after warm-up (still on "
+            f"challenge page); will retry with a fresh warm."
+        )
+    while True:
+        print("  Page", pnum)
+        await pg.wait_for_timeout(2000)
 
-            cards = await pg.query_selector_all("[class*=feedItemBox]")
-            for c in cards:
-                try:
-                    price_el  = await c.query_selector("[data-testid=price]")
-                    street_el = await c.query_selector("[data-testid=street-name]")
-                    line1_el  = await c.query_selector("[data-testid=item-info-line-1st]")
-                    line2_el  = await c.query_selector("[data-testid=item-info-line-2nd]")
-                    link_el   = await c.query_selector("a[href]")
-                    price  = (await price_el.inner_text()).strip() if price_el else ""
-                    street = (await street_el.inner_text()).strip() if street_el else ""
-                    line1  = (await line1_el.inner_text()).strip() if line1_el else ""
-                    line2  = (await line2_el.inner_text()).strip() if line2_el else ""
-                    href   = await link_el.get_attribute("href") if link_el else ""
-                    card_text = (await c.inner_text()).strip()
-                    date_posted = parse_yad2_date(card_text)
-                    url    = "https://www.yad2.co.il" + href if href and href.startswith("/") else href
-                    # Skip promoted widget blocks ("ListingPro") that aren't real listings
-                    if not url or "/realestate/item/" not in url:
-                        continue
-                    if url in seen_urls: continue
-                    seen_urls.add(url)
-                    rooms = floor = size = ""
-                    m = re.search(r"(\d+(?:\.\d+)?)\s*\u05d7\u05d3\u05e8", line2)
-                    if m: rooms = m.group(1)
-                    # Ground floor: yad2 writes "\u05e7\u05d5\u05de\u05d4 \u05e7\u05e8\u05e7\u05e2" (the word, not a digit),
-                    # so map it to "0" before the digit regex \u2014 otherwise the regex
-                    # skips past "\u05e7\u05e8\u05e7\u05e2" and grabs the sqm, which the guard below then
-                    # blanks, leaving ground-floor flats with no floor at all.
-                    if re.search(r"\u05e7\u05d5\u05de\u05d4[\s\u200e\u200f]*\u05e7\u05e8\u05e7\u05e2", line2):
-                        floor = "0"
-                    else:
-                        m = re.search(r"\u05e7\u05d5\u05de\u05d4[^\d]*(\d+)", line2)
-                        if m: floor = m.group(1)
-                    m = re.search(r"(\d+)\s*\u05de\u05f4\u05e8", line2)
-                    if m: size = m.group(1)
-                    # If the "floor" we captured equals the size, the listing actually has no
-                    # floor number (e.g. garden/penthouse) and the regex jumped to the sqm.
-                    if floor and floor == size:
-                        floor = ""
-                    # Require both a price AND a street so promoted/empty cards are dropped
-                    if price and street:
-                        listings.append({"price":price,"street":street,"info":line1,"rooms":rooms,"floor":floor,"size_sqm":size,"url":url,"date_posted":date_posted})
-                except: continue
-            nb = await pg.query_selector("a[aria-label='\u05e2\u05de\u05d5\u05d3 \u05d4\u05d1\u05d0']")
-            if not nb or await nb.get_attribute("aria-disabled") == "true":
-                break
-            # Robust click: scroll into view, normal click with shorter timeout,
-            # fall back to JS-dispatched click if the button is overlapped by a
-            # banner/modal/ad. Without this, ~20% of runs fail at random pages.
-            clicked = False
+        # Extract dates from React fiber state on this page (zero extra requests)
+        try:
+            fiber_dates = await pg.evaluate("""() => {
+                const results = {};
+                document.querySelectorAll("[class*='feedItemBox']").forEach(card => {
+                    const fk = Object.keys(card).find(k => k.startsWith('__reactFiber'));
+                    if (!fk) return;
+                    let fiber = card[fk];
+                    for (let i = 0; i < 50 && fiber; i++) {
+                        try {
+                            const p = fiber.memoizedProps || {};
+                            const src = [p, p.data, p.listing, p.item, p.feedItem, p.adData].filter(Boolean);
+                            for (const obj of src) {
+                                const id = obj.token || obj.id || obj.orderId;
+                                const dt = obj.date || obj.date_added || obj.publishDate ||
+                                           obj.feedDate || obj.listingDate || obj.postedAt ||
+                                           obj.created_at || obj.updated_at;
+                                if (id && dt) { results[String(id)] = String(dt); break; }
+                            }
+                        } catch(e) {}
+                        fiber = fiber.return;
+                    }
+                });
+                return results;
+            }""")
+            intercepted_dates.update(fiber_dates or {})
+        except:
+            pass
+
+        cards = await pg.query_selector_all("[class*=feedItemBox]")
+        for c in cards:
             try:
-                await nb.scroll_into_view_if_needed(timeout=5000)
-            except Exception:
-                pass
+                price_el  = await c.query_selector("[data-testid=price]")
+                street_el = await c.query_selector("[data-testid=street-name]")
+                line1_el  = await c.query_selector("[data-testid=item-info-line-1st]")
+                line2_el  = await c.query_selector("[data-testid=item-info-line-2nd]")
+                link_el   = await c.query_selector("a[href]")
+                price  = (await price_el.inner_text()).strip() if price_el else ""
+                street = (await street_el.inner_text()).strip() if street_el else ""
+                line1  = (await line1_el.inner_text()).strip() if line1_el else ""
+                line2  = (await line2_el.inner_text()).strip() if line2_el else ""
+                href   = await link_el.get_attribute("href") if link_el else ""
+                card_text = (await c.inner_text()).strip()
+                date_posted = parse_yad2_date(card_text)
+                url    = "https://www.yad2.co.il" + href if href and href.startswith("/") else href
+                # Skip promoted widget blocks ("ListingPro") that aren't real listings
+                if not url or "/realestate/item/" not in url:
+                    continue
+                if url in seen_urls: continue
+                seen_urls.add(url)
+                rooms = floor = size = ""
+                m = re.search(r"(\d+(?:\.\d+)?)\s*\u05d7\u05d3\u05e8", line2)
+                if m: rooms = m.group(1)
+                # Ground floor: yad2 writes "\u05e7\u05d5\u05de\u05d4 \u05e7\u05e8\u05e7\u05e2" (the word, not a digit),
+                # so map it to "0" before the digit regex \u2014 otherwise the regex
+                # skips past "\u05e7\u05e8\u05e7\u05e2" and grabs the sqm, which the guard below then
+                # blanks, leaving ground-floor flats with no floor at all.
+                if re.search(r"\u05e7\u05d5\u05de\u05d4[\s\u200e\u200f]*\u05e7\u05e8\u05e7\u05e2", line2):
+                    floor = "0"
+                else:
+                    m = re.search(r"\u05e7\u05d5\u05de\u05d4[^\d]*(\d+)", line2)
+                    if m: floor = m.group(1)
+                m = re.search(r"(\d+)\s*\u05de\u05f4\u05e8", line2)
+                if m: size = m.group(1)
+                # If the "floor" we captured equals the size, the listing actually has no
+                # floor number (e.g. garden/penthouse) and the regex jumped to the sqm.
+                if floor and floor == size:
+                    floor = ""
+                # Require both a price AND a street so promoted/empty cards are dropped
+                if price and street:
+                    listings.append({"price":price,"street":street,"info":line1,"rooms":rooms,"floor":floor,"size_sqm":size,"url":url,"date_posted":date_posted})
+            except: continue
+        nb = await pg.query_selector("a[aria-label='\u05e2\u05de\u05d5\u05d3 \u05d4\u05d1\u05d0']")
+        if not nb or await nb.get_attribute("aria-disabled") == "true":
+            break
+        # Robust click: scroll into view, normal click with shorter timeout,
+        # fall back to JS-dispatched click if the button is overlapped by a
+        # banner/modal/ad. Without this, ~20% of runs fail at random pages.
+        clicked = False
+        try:
+            await nb.scroll_into_view_if_needed(timeout=5000)
+        except Exception:
+            pass
+        try:
+            await nb.click(timeout=10000)
+            clicked = True
+        except Exception:
             try:
-                await nb.click(timeout=10000)
+                await pg.evaluate("(el) => el.click()", nb)
                 clicked = True
             except Exception:
-                try:
-                    await pg.evaluate("(el) => el.click()", nb)
-                    clicked = True
-                except Exception:
-                    pass
-            if not clicked:
-                print(f"  WARN: could not click 'next page' on page {pnum}; stopping pagination")
-                break
-            pnum += 1
-            await pg.wait_for_timeout(3000)
-        print("Total:", len(listings), "listings (raw)")
+                pass
+        if not clicked:
+            print(f"  WARN: could not click 'next page' on page {pnum}; stopping pagination")
+            break
+        pnum += 1
+        await pg.wait_for_timeout(3000)
+    print(f"[{cfg.key}] Total:", len(listings), "listings (raw)")
 
-        # Detect bot-throttled partial scrapes. Yad2 sometimes serves a page
-        # where the "next" button is missing/disabled even though more results
-        # exist — the loop above breaks cleanly and we'd save garbage. Raise
-        # so run_with_retry retries with backoff instead of corrupting state.
-        if pnum < MIN_PAGES_FOR_TRUST:
-            await context.close()
-            raise RuntimeError(
-                f"Pagination stopped at page {pnum} (expected >= {MIN_PAGES_FOR_TRUST}); "
-                f"likely bot-block. Refusing to save partial snapshot."
-            )
-
-        # ── Dedupe by listing ID (Yad2 boosts paid ads to multiple search-result pages
-        #    under different ?pagination/spot/location query strings — same property,
-        #    counted N times). Key on the path segment, ignore query string.
-        seen = set()
-        deduped = []
-        for r in listings:
-            lid = extract_id_from_url(r.get("url", ""))
-            if not lid or lid in seen:
-                continue
-            seen.add(lid)
-            deduped.append(r)
-        if len(deduped) != len(listings):
-            print(f"Deduplicated: {len(listings)} -> {len(deduped)} ({len(listings) - len(deduped)} booster duplicates removed)")
-        listings = deduped
-
-        # Backfill missing neighborhoods using a street→neighborhood lookup built
-        # from listings whose card text DID include a neighborhood.
-        enriched, ambiguous = enrich_missing_neighborhoods(listings)
-        if enriched:
-            print(f"Neighborhood enrichment (street lookup): filled {enriched} listings"
-                  + (f" ({len(ambiguous)} ambiguous streets skipped)" if ambiguous else ""))
-
-        # ── Canonical neighborhood enrichment via per-neighborhood URLs ────────
-        # yad2 has a `&neighborhood=<id>` filter that is the SOURCE OF TRUTH for
-        # which neighborhood a listing belongs to (it's set from yad2's internal
-        # database, not from the listing's card text). For each known
-        # neighborhood we navigate the filtered URL and harvest listing-IDs,
-        # then override our card-text inference. IDs map lives in
-        # yad2_neighborhood_ids.json; populate it via _discover_neighborhood_ids.py.
-        nb_ids_file = os.path.join(OUT, "yad2_neighborhood_ids.json")
-        canonical_nb_map = {}
-        if os.path.exists(nb_ids_file):
-            try:
-                with open(nb_ids_file, encoding="utf-8") as f:
-                    nb_ids = json.load(f)
-            except Exception:
-                nb_ids = {}
-            if nb_ids:
-                print(f"Canonical neighborhood scrape: querying {len(nb_ids)} neighborhoods...")
-                for nb_name, nb_id in nb_ids.items():
-                    nb_url = f"https://www.yad2.co.il/realestate/forsale?city=8700&rooms=4-5&neighborhood={nb_id}"
-                    nb_listing_ids = await collect_listing_ids_from_url(pg, nb_url)
-                    for lid in nb_listing_ids:
-                        canonical_nb_map[lid] = nb_name
-                    print(f"    {nb_name}: {len(nb_listing_ids)} listings")
-                # Apply canonical map: override the 2nd info-part with the
-                # authoritative neighborhood from yad2.
-                rewritten = 0
-                for r in listings:
-                    lid = extract_id_from_url(r.get("url", ""))
-                    canonical = canonical_nb_map.get(lid)
-                    if not canonical:
-                        continue
-                    parts = str(r.get("info", "")).split(",")
-                    apt_type = parts[0].strip() if parts else "דירה"
-                    city     = parts[-1].strip() if len(parts) >= 2 else "רעננה"
-                    new_info = f"{apt_type}, {canonical}, {city}"
-                    if r.get("info") != new_info:
-                        r["info"] = new_info
-                        rewritten += 1
-                print(f"Canonical mapping rewrote {rewritten} listings; "
-                      f"{len(canonical_nb_map)} listing-IDs covered by canonical scrape.")
-
-        # ── Merge fiber-intercepted dates with persistent cache ───────────────
-        try:
-            with open(DATE_POSTED_FILE, encoding="utf-8") as f:
-                date_cache = json.load(f)
-        except:
-            date_cache = {}
-
-        print(f"  React fiber dates found: {len(intercepted_dates)}")
-
-        # Apply fiber dates to listings (date_cache is keyed by listing-ID)
-        for r in listings:
-            lid = extract_id_from_url(r.get("url", ""))
-            date = intercepted_dates.get(lid) or date_cache.get(lid, "")
-            r["date_posted"] = date
-            if date and lid:
-                date_cache[lid] = date
-
-        # ── Fallback: in-browser fetch (uses session cookies, bypasses bot block) ─
-        still_missing = [r for r in listings if not r.get("date_posted") and r.get("url")]
-        if still_missing:
-            print(f"  Fetching {len(still_missing)} dates via in-browser fetch...")
-            fetched_ok = 0
-            batch_size = 20
-            for batch_start in range(0, len(still_missing), batch_size):
-                batch = still_missing[batch_start:batch_start + batch_size]
-                urls_clean = [r["url"].split("?")[0] for r in batch]
-                try:
-                    results = await pg.evaluate(
-                        r"""async (urls) => {
-                            return Promise.all(urls.map(async (url) => {
-                                try {
-                                    const resp = await fetch(url);
-                                    const text = await resp.text();
-                                    const m = text.match(/פורסם ב[^0-9]*(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-                                    return m ? m[1] : '';
-                                } catch(e) { return ''; }
-                            }));
-                        }""",
-                        urls_clean
-                    )
-                except Exception:
-                    results = [""] * len(batch)
-                for r, raw in zip(batch, results):
-                    d = parse_yad2_date(raw or "")
-                    if d:
-                        r["date_posted"] = d
-                        lid = extract_id_from_url(r.get("url", ""))
-                        if lid:
-                            date_cache[lid] = d
-                        fetched_ok += 1
-                if batch_start + batch_size < len(still_missing):
-                    print(f"  ...{min(batch_start+batch_size, len(still_missing))}/{len(still_missing)} done")
-            print(f"  Got {fetched_ok}/{len(still_missing)} dates via browser fetch")
-
-        # ── Final fallback: use first_seen date when all else fails ─────────
-        # both first_seen and date_cache are keyed by listing-ID (stable across runs)
-        for r in listings:
-            if not r.get("date_posted"):
-                lid = extract_id_from_url(r.get("url", ""))
-                if not lid:
-                    continue
-                fs_date = first_seen.get(lid, "")
-                if fs_date:
-                    r["date_posted"] = fs_date
-                    date_cache[lid] = fs_date
-                else:
-                    r["date_posted"] = today
-                    first_seen[lid] = today
-                    date_cache[lid] = today
-
-        matched = sum(1 for r in listings if r.get("date_posted"))
-        print(f"  Total dates resolved: {matched}/{len(listings)} listings")
-        with open(DATE_POSTED_FILE, "w", encoding="utf-8") as f:
-            json.dump(date_cache, f, ensure_ascii=False)
-
+    # Detect bot-throttled partial scrapes. Yad2 sometimes serves a page
+    # where the "next" button is missing/disabled even though more results
+    # exist — the loop above breaks cleanly and we'd save garbage. Raise
+    # so run_leg_with_retry retries with backoff instead of corrupting state.
+    if pnum < cfg.min_pages_for_trust:
         await context.close()
+        raise RuntimeError(
+            f"[{cfg.key}] Pagination stopped at page {pnum} (expected >= {cfg.min_pages_for_trust}); "
+            f"likely bot-block. Refusing to save partial snapshot."
+        )
 
+    # ── Dedupe by listing ID (Yad2 boosts paid ads to multiple search-result pages
+    #    under different ?pagination/spot/location query strings — same property,
+    #    counted N times). Key on the path segment, ignore query string.
+    seen = set()
+    deduped = []
+    for r in listings:
+        lid = extract_id_from_url(r.get("url", ""))
+        if not lid or lid in seen:
+            continue
+        seen.add(lid)
+        deduped.append(r)
+    if len(deduped) != len(listings):
+        print(f"Deduplicated: {len(listings)} -> {len(deduped)} ({len(listings) - len(deduped)} booster duplicates removed)")
+    listings = deduped
+
+    # Backfill missing neighborhoods using a street→neighborhood lookup built
+    # from listings whose card text DID include a neighborhood.
+    enriched, ambiguous = enrich_missing_neighborhoods(listings)
+    if enriched:
+        print(f"Neighborhood enrichment (street lookup): filled {enriched} listings"
+              + (f" ({len(ambiguous)} ambiguous streets skipped)" if ambiguous else ""))
+
+    # ── Canonical neighborhood enrichment via per-neighborhood URLs ────────
+    # yad2 has a `&neighborhood=<id>` filter that is the SOURCE OF TRUTH for
+    # which neighborhood a listing belongs to (it's set from yad2's internal
+    # database, not from the listing's card text). For each known
+    # neighborhood we navigate the filtered URL and harvest listing-IDs,
+    # then override our card-text inference. IDs map lives in
+    # yad2_neighborhood_ids.json; populate it via _discover_neighborhood_ids.py.
+    nb_ids_file = os.path.join(OUT, "yad2_neighborhood_ids.json")
+    canonical_nb_map = {}
+    if os.path.exists(nb_ids_file):
+        try:
+            with open(nb_ids_file, encoding="utf-8") as f:
+                nb_ids = json.load(f)
+        except Exception:
+            nb_ids = {}
+        if nb_ids:
+            print(f"Canonical neighborhood scrape: querying {len(nb_ids)} neighborhoods...")
+            for nb_name, nb_id in nb_ids.items():
+                nb_url = f"https://www.yad2.co.il/realestate/{cfg.feed_path}?city={CITY_ID}&{ROOMS_QS}&neighborhood={nb_id}"
+                nb_listing_ids = await collect_listing_ids_from_url(pg, nb_url)
+                for lid in nb_listing_ids:
+                    canonical_nb_map[lid] = nb_name
+                print(f"    {nb_name}: {len(nb_listing_ids)} listings")
+            # Apply canonical map: override the 2nd info-part with the
+            # authoritative neighborhood from yad2.
+            rewritten = 0
+            for r in listings:
+                lid = extract_id_from_url(r.get("url", ""))
+                canonical = canonical_nb_map.get(lid)
+                if not canonical:
+                    continue
+                parts = str(r.get("info", "")).split(",")
+                apt_type = parts[0].strip() if parts else "דירה"
+                city     = parts[-1].strip() if len(parts) >= 2 else "רעננה"
+                new_info = f"{apt_type}, {canonical}, {city}"
+                if r.get("info") != new_info:
+                    r["info"] = new_info
+                    rewritten += 1
+            print(f"Canonical mapping rewrote {rewritten} listings; "
+                  f"{len(canonical_nb_map)} listing-IDs covered by canonical scrape.")
+
+    # ── Merge fiber-intercepted dates with persistent cache ───────────────
+    try:
+        with open(cfg.date_posted_file, encoding="utf-8") as f:
+            date_cache = json.load(f)
+    except:
+        date_cache = {}
+
+    print(f"  React fiber dates found: {len(intercepted_dates)}")
+
+    # Apply fiber dates to listings (date_cache is keyed by listing-ID)
+    for r in listings:
+        lid = extract_id_from_url(r.get("url", ""))
+        date = intercepted_dates.get(lid) or date_cache.get(lid, "")
+        r["date_posted"] = date
+        if date and lid:
+            date_cache[lid] = date
+
+    # ── Fallback: in-browser fetch (uses session cookies, bypasses bot block) ─
+    still_missing = [r for r in listings if not r.get("date_posted") and r.get("url")]
+    if still_missing:
+        print(f"  Fetching {len(still_missing)} dates via in-browser fetch...")
+        fetched_ok = 0
+        batch_size = 20
+        for batch_start in range(0, len(still_missing), batch_size):
+            batch = still_missing[batch_start:batch_start + batch_size]
+            urls_clean = [r["url"].split("?")[0] for r in batch]
+            try:
+                results = await pg.evaluate(
+                    r"""async (urls) => {
+                        return Promise.all(urls.map(async (url) => {
+                            try {
+                                const resp = await fetch(url);
+                                const text = await resp.text();
+                                const m = text.match(/פורסם ב[^0-9]*(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+                                return m ? m[1] : '';
+                            } catch(e) { return ''; }
+                        }));
+                    }""",
+                    urls_clean
+                )
+            except Exception:
+                results = [""] * len(batch)
+            for r, raw in zip(batch, results):
+                d = parse_yad2_date(raw or "")
+                if d:
+                    r["date_posted"] = d
+                    lid = extract_id_from_url(r.get("url", ""))
+                    if lid:
+                        date_cache[lid] = d
+                    fetched_ok += 1
+            if batch_start + batch_size < len(still_missing):
+                print(f"  ...{min(batch_start+batch_size, len(still_missing))}/{len(still_missing)} done")
+        print(f"  Got {fetched_ok}/{len(still_missing)} dates via browser fetch")
+
+    # ── Final fallback: use first_seen date when all else fails ─────────
+    # both first_seen and date_cache are keyed by listing-ID (stable across runs)
+    for r in listings:
+        if not r.get("date_posted"):
+            lid = extract_id_from_url(r.get("url", ""))
+            if not lid:
+                continue
+            fs_date = first_seen.get(lid, "")
+            if fs_date:
+                r["date_posted"] = fs_date
+                date_cache[lid] = fs_date
+            else:
+                r["date_posted"] = today
+                first_seen[lid] = today
+                date_cache[lid] = today
+
+    matched = sum(1 for r in listings if r.get("date_posted"))
+    print(f"[{cfg.key}]   Total dates resolved: {matched}/{len(listings)} listings")
+    with open(cfg.date_posted_file, "w", encoding="utf-8") as f:
+        json.dump(date_cache, f, ensure_ascii=False)
+
+    await context.close()
+    return listings, pnum
+
+
+def finalize_leg(cfg, listings, pnum, first_seen, today, now):
+    """Diff `listings` against cfg's previous-run baseline, compute stats,
+    write all of cfg's history/log files, and atomically save the new
+    snapshot. Mutates `first_seen` in place (caller owns persisting it
+    beyond this call — though this function also writes it to
+    cfg.first_seen_file itself, matching the original run()'s behavior)."""
     if not listings:
-        print("No listings scraped (bot block?). Exiting without overwriting data.")
+        print(f"[{cfg.key}] No listings scraped (bot block?). Exiting without overwriting data.")
         return
 
     # Cross-run maps are keyed by listing-ID (stable across runs). yad2 randomizes
@@ -736,22 +803,20 @@ async def run():
     # ~all listings as both "new" and "removed" every run.
     curr_map = {extract_id_from_url(r["url"]): r for r in listings if r.get("url")}
 
-    # first_seen was loaded at the start of run() before browser launch
-
     # ── Load previous run ────────────────────────────────────────────────────
     prev_map = {}
-    if os.path.exists(PREV_FILE):
+    if os.path.exists(cfg.prev_file):
         try:
-            with open(PREV_FILE, encoding="utf-8") as f:
+            with open(cfg.prev_file, encoding="utf-8") as f:
                 prev_map = {extract_id_from_url(r["url"]): r for r in json.load(f) if r.get("url")}
         except Exception:
             prev_map = {}
 
     # Grace-period state: {listing_id: {"misses": n, "record": {...}, "first_seen": date}}
     pending_removals = {}
-    if os.path.exists(PENDING_REMOVALS_FILE):
+    if os.path.exists(cfg.pending_removals_file):
         try:
-            with open(PENDING_REMOVALS_FILE, encoding="utf-8") as f:
+            with open(cfg.pending_removals_file, encoding="utf-8") as f:
                 pending_removals = json.load(f)
         except Exception:
             pending_removals = {}
@@ -762,7 +827,7 @@ async def run():
     # tomorrow's diff doesn't cascade more false-removals.
     if prev_map and len(curr_map) < MIN_LISTINGS_FRACTION_VS_PREV * len(prev_map):
         raise RuntimeError(
-            f"Listing count dropped from {len(prev_map)} to {len(curr_map)} "
+            f"[{cfg.key}] Listing count dropped from {len(prev_map)} to {len(curr_map)} "
             f"({len(curr_map)/len(prev_map)*100:.1f}% of previous, "
             f"threshold {int(MIN_LISTINGS_FRACTION_VS_PREV*100)}%); "
             f"likely partial scrape. Refusing to save."
@@ -832,8 +897,8 @@ async def run():
             "apt_type": apt,
         })
     if dom_rows:
-        dom_exists = os.path.exists(DOM_LOG_FILE)
-        with open(DOM_LOG_FILE, "a", newline="", encoding="utf-8-sig") as f:
+        dom_exists = os.path.exists(cfg.dom_log_file)
+        with open(cfg.dom_log_file, "a", newline="", encoding="utf-8-sig") as f:
             w = csv.DictWriter(f, fieldnames=["removed_date","url","first_seen","dom_days","price","neighborhood","size_sqm","apt_type"])
             if not dom_exists: w.writeheader()
             w.writerows(dom_rows)
@@ -867,7 +932,7 @@ async def run():
         p = parse_price_num(r.get("price", ""))
         try: s = float(r.get("size_sqm") or 0)
         except Exception: s = 0
-        if p is not None and p < 500_000: return False
+        if p is not None and p < cfg.min_sane_price: return False
         if s and (s < 25 or s > 1000): return False
         return True
     stats_listings = [r for r in listings if _stats_sane(r)]
@@ -909,8 +974,8 @@ async def run():
     avg_active_dom = round(sum(active_doms) / len(active_doms), 1) if active_doms else None
 
     # ── Append to history CSV ─────────────────────────────────────────────────
-    hist_exists = os.path.exists(HISTORY_FILE)
-    with open(HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
+    hist_exists = os.path.exists(cfg.history_file)
+    with open(cfg.history_file, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not hist_exists:
             w.writerow(["timestamp","count","avg_price","median_price","min_price","max_price",
@@ -962,9 +1027,9 @@ async def run():
         if p and s: nb_ppsqm[(nb, rb)].append(p / s)
 
     nb_cols = ["timestamp","neighborhood","rooms","avg_price","avg_price_per_sqm","count","avg_active_dom"]
-    ensure_csv_columns(NB_HISTORY_FILE, nb_cols)
-    nb_exists = os.path.exists(NB_HISTORY_FILE)
-    with open(NB_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
+    ensure_csv_columns(cfg.nb_history_file, nb_cols)
+    nb_exists = os.path.exists(cfg.nb_history_file)
+    with open(cfg.nb_history_file, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not nb_exists:
             w.writerow(nb_cols)
@@ -988,9 +1053,9 @@ async def run():
         if p and s: type_ppsqm[(apt, rb)].append(p / s)
 
     type_cols = ["timestamp","apt_type","rooms","avg_price","avg_price_per_sqm","count","avg_active_dom"]
-    ensure_csv_columns(TYPE_HISTORY_FILE, type_cols)
-    type_exists = os.path.exists(TYPE_HISTORY_FILE)
-    with open(TYPE_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
+    ensure_csv_columns(cfg.type_history_file, type_cols)
+    type_exists = os.path.exists(cfg.type_history_file)
+    with open(cfg.type_history_file, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not type_exists:
             w.writerow(type_cols)
@@ -1013,9 +1078,9 @@ async def run():
         if p and s: rooms_ppsqm[rb].append(p / s)
 
     rooms_cols = ["timestamp","rooms","avg_price","median_price","avg_price_per_sqm","count","avg_active_dom"]
-    ensure_csv_columns(ROOMS_HISTORY_FILE, rooms_cols)
-    rooms_exists = os.path.exists(ROOMS_HISTORY_FILE)
-    with open(ROOMS_HISTORY_FILE, "a", newline="", encoding="utf-8-sig") as f:
+    ensure_csv_columns(cfg.rooms_history_file, rooms_cols)
+    rooms_exists = os.path.exists(cfg.rooms_history_file)
+    with open(cfg.rooms_history_file, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not rooms_exists:
             w.writerow(rooms_cols)
@@ -1031,38 +1096,38 @@ async def run():
     with tempfile.NamedTemporaryFile("w", dir=OUT, suffix=".json", delete=False, encoding="utf-8") as tf:
         json.dump(listings, tf, ensure_ascii=False, indent=2)
         tmp_json = tf.name
-    os.replace(tmp_json, JSON_FILE)
+    os.replace(tmp_json, cfg.json_file)
     with tempfile.NamedTemporaryFile("w", dir=OUT, suffix=".csv", delete=False,
                                      newline="", encoding="utf-8-sig") as tf:
         w = csv.DictWriter(tf, fieldnames=listings[0].keys())
         w.writeheader(); w.writerows(listings)
         tmp_csv = tf.name
-    os.replace(tmp_csv, CSV_FILE)
+    os.replace(tmp_csv, cfg.csv_file)
     # Preserve the previous run's snapshot (copy2 keeps its original mtime, which
     # the dashboard shows as the "since" time) BEFORE overwriting PREV_FILE with
     # this run. Best-effort — never let it fail the scrape.
     try:
-        if os.path.exists(PREV_FILE):
+        if os.path.exists(cfg.prev_file):
             import shutil
-            shutil.copy2(PREV_FILE, DISPLAY_PREV_FILE)
+            shutil.copy2(cfg.prev_file, cfg.display_prev_file)
     except Exception as e:
-        print(f"  WARN: could not update display baseline: {e}")
-    with open(PREV_FILE, "w", encoding="utf-8") as f:
+        print(f"[{cfg.key}]   WARN: could not update display baseline: {e}")
+    with open(cfg.prev_file, "w", encoding="utf-8") as f:
         json.dump(listings, f, ensure_ascii=False, indent=2)
-    with open(FIRST_SEEN_FILE, "w", encoding="utf-8") as f:
+    with open(cfg.first_seen_file, "w", encoding="utf-8") as f:
         json.dump(first_seen, f, ensure_ascii=False, indent=2)
-    with open(PENDING_REMOVALS_FILE, "w", encoding="utf-8") as f:
+    with open(cfg.pending_removals_file, "w", encoding="utf-8") as f:
         json.dump(pending_removals, f, ensure_ascii=False, indent=2)
 
-    print(f"Saved: {len(listings)} listings")
-    print(f"New: {len(new_ids)} | Removed: {len(removed_ids)} | Price cuts: {cuts} (avg {avg_cut_pct}%)")
-    print(f"Absorption: {absorption}% | Survival 30d: {survival_30d}%")
+    print(f"[{cfg.key}] Saved: {len(listings)} listings")
+    print(f"[{cfg.key}] New: {len(new_ids)} | Removed: {len(removed_ids)} | Price cuts: {cuts} (avg {avg_cut_pct}%)")
+    print(f"[{cfg.key}] Absorption: {absorption}% | Survival 30d: {survival_30d}%")
     if dom_days_list:
-        print(f"Avg DOM (removed this run): {avg_dom} days")
+        print(f"[{cfg.key}] Avg DOM (removed this run): {avg_dom} days")
 
     # ── Run log ───────────────────────────────────────────────────────────────
-    log_exists = os.path.exists(RUN_LOG_FILE)
-    with open(RUN_LOG_FILE, "a", newline="", encoding="utf-8-sig") as f:
+    log_exists = os.path.exists(cfg.run_log_file)
+    with open(cfg.run_log_file, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not log_exists:
             w.writerow(["timestamp","status","pages_scraped","total_listings",
@@ -1075,12 +1140,12 @@ async def run():
                     avg_ppsqm, absorption,
                     survival_30d if survival_30d is not None else "",
                     avg_dom if avg_dom is not None else "", ""])
-    print(f"Run log updated: {RUN_LOG_FILE}")
+    print(f"[{cfg.key}] Run log updated: {cfg.run_log_file}")
 
-def log_error(error_msg):
+def log_error(run_log_file, error_msg):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    log_exists = os.path.exists(RUN_LOG_FILE)
-    with open(RUN_LOG_FILE, "a", newline="", encoding="utf-8-sig") as f:
+    log_exists = os.path.exists(run_log_file)
+    with open(run_log_file, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if not log_exists:
             w.writerow(["timestamp","status","pages_scraped","total_listings",
@@ -1089,36 +1154,74 @@ def log_error(error_msg):
                         "avg_price_per_sqm","absorption_rate","survival_30d","avg_dom","error"])
         w.writerow([now, "error", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", error_msg])
 
-async def run_with_retry(max_attempts=6, retry_delays_s=(300, 600, 1200, 2400, 3600)):
-    """Wrap run() with retry-and-backoff for transient failures (click timeouts,
-    network blips, bot blocks). Only the FINAL outcome lands in run_log.csv —
-    intermediate retries are printed but not logged, so the operator sees one
-    row per invocation regardless of how many retries it took.
+async def run_leg_with_retry(p, cfg, first_seen, max_attempts=6,
+                              retry_delays_s=(300, 600, 1200, 2400, 3600)):
+    """Run one leg (scrape + finalize) with retry-and-backoff for transient
+    failures (click timeouts, network blips, bot blocks) — scoped to a
+    single deal type so a bot-block on one leg never re-scrapes the other,
+    already-saved leg. Only the FINAL outcome lands in cfg.run_log_file —
+    intermediate retries are printed but not logged, so the operator sees
+    one row per invocation regardless of how many retries it took.
 
-    Default budget: 6 attempts spread over ~2¼ hours (5min, 10min, 20min, 40min,
-    60min) — gives heavy Yad2 throttles time to self-heal before giving up."""
+    Re-warms Radware clearance before each retry (not before the first
+    attempt — the caller already warmed once, shared across both legs),
+    mirroring the original run_with_retry()'s behavior where every retry of
+    run() re-warmed as its first line.
+
+    Default budget: 6 attempts spread over ~2¼ hours (5min, 10min, 20min,
+    40min, 60min) per leg — gives heavy Yad2 throttles time to self-heal
+    before giving up. Never raises — owns logging its own leg's outcome."""
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
-            await run()
-            return  # success
+            today = shift_saturday_to_friday(datetime.now().strftime("%Y-%m-%d"))
+            now   = datetime.now().strftime("%Y-%m-%d %H:%M")
+            listings, pnum = await run_leg(p, cfg, first_seen, today)
+            finalize_leg(cfg, listings, pnum, first_seen, today, now)
+            return
         except Exception as e:
             last_err = e
-            print(f"Attempt {attempt}/{max_attempts} failed: {e}")
+            print(f"[{cfg.key}] Attempt {attempt}/{max_attempts} failed: {e}")
             if attempt < max_attempts:
                 delay = retry_delays_s[min(attempt - 1, len(retry_delays_s) - 1)]
-                print(f"  retrying in {delay}s ({delay // 60} min)...")
+                print(f"  [{cfg.key}] retrying in {delay}s ({delay // 60} min)...")
                 await asyncio.sleep(delay)
-    raise last_err
+                await ensure_radware_clearance(p, url=cfg.url)
+    print(f"[{cfg.key}] ERROR (after retries): {last_err}")
+    log_error(cfg.run_log_file, str(last_err))
+
+
+def _load_json_or_default(path, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+async def run_all():
+    """Combined entry point: scrape sale, then rent, in one invocation,
+    sharing a single Radware warm-up (clearance is domain-level, not
+    path-specific, so warming once on the sale URL also clears rent)."""
+    first_seen = {cfg.key: _load_json_or_default(cfg.first_seen_file, {}) for cfg in DEAL_CONFIGS}
+    async with async_playwright() as p:
+        await ensure_radware_clearance(p, url=SALE_CFG.url)
+        for cfg in DEAL_CONFIGS:
+            await run_leg_with_retry(p, cfg, first_seen[cfg.key])
 
 
 if not acquire_single_instance_lock():
     print("Another scraper instance is already running; exiting.")
     sys.exit(0)
 try:
-    asyncio.run(run_with_retry())
+    asyncio.run(run_all())
 except Exception as e:
-    print(f"ERROR (after retries): {e}")
-    log_error(str(e))
+    # Only reachable for a catastrophic failure before either leg's own
+    # per-leg logging ran (e.g. Playwright itself failed to launch).
+    print(f"ERROR (top-level): {e}")
+    log_error(SALE_CFG.run_log_file, str(e))
+    log_error(RENT_CFG.run_log_file, str(e))
 finally:
     release_single_instance_lock()

@@ -10,7 +10,7 @@ st.set_page_config(
     page_title="Yad2 Market | Ra'anana",
     page_icon="",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
@@ -24,8 +24,16 @@ html, body, [class*="css"] {
     -moz-osx-font-smoothing: grayscale;
 }
 #MainMenu, footer, header { visibility: hidden; }
-[data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
 .stApp { background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
+/* Move the sidebar to the RTL-conventional right side using flex `order`
+   (stAppViewContainer is display:flex/row) instead of flipping `direction`.
+   `direction` inherits into every descendant, including BaseWeb's Slider,
+   whose thumb-position math breaks under inherited rtl (verified: thumbs
+   render up to a full track-width outside the track) — Streamlit/BaseWeb
+   don't officially support RTL. `order` only repositions the flex item
+   itself, so it sidesteps that entirely. */
+[data-testid="stAppViewContainer"] > [data-testid="stSidebar"] { order: 2; }
+[data-testid="stAppViewContainer"] > section.main { order: 1; }
 .block-container { max-width: 1700px !important; padding-top: 0.5rem !important; padding-left: 2rem !important; padding-right: 2rem !important; direction: rtl; }
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 .element-container { margin-bottom: 0 !important; }
@@ -68,11 +76,12 @@ html, body, [class*="css"] {
 .kpi-value, .d-value, .stPlotlyChart, .ag-root-wrapper, .stDataFrame { direction: ltr; }
 .kpi-value, .d-value { text-align: right; }
 
-/* ── Sidebar ──────────────────────────────────────────── */
+/* ── Sidebar / nav rail ──────────────────────────────── */
 [data-testid="stSidebar"] {
     background: #ffffff !important;
-    border-right: 1px solid #e2e8f0 !important;
-    box-shadow: 1px 0 3px rgba(15,23,42,0.03);
+    border-left: 1px solid #e2e8f0 !important;
+    box-shadow: -1px 0 3px rgba(15,23,42,0.03);
+    width: 252px !important; min-width: 252px !important;
 }
 [data-testid="stSidebar"] .stSelectbox label,
 [data-testid="stSidebar"] .stSlider label {
@@ -113,6 +122,43 @@ html, body, [class*="css"] {
 .sidebar-status .dpill.green { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
 .sidebar-status .dpill.red   { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
 .sidebar-status .dpill.yel   { background: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+
+/* ── Sidebar navigation (styled st.radio, circle hidden) ─────────────── */
+.nav-label {
+    font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #94a3b8; margin: 2px 2px 6px;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] { gap: 3px !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    background: transparent; border: 1px solid transparent; border-radius: 10px !important;
+    padding: 9px 12px !important; margin: 0 !important; width: 100%;
+    transition: background 0.15s, border-color 0.15s;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: #f8fafc; }
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+    background: #eff6ff !important; border-color: #dbeafe !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child { display: none; }
+[data-testid="stSidebar"] div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+    font-size: 0.86rem !important; font-weight: 600 !important; color: #334155 !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+    color: #2563eb !important; font-weight: 700 !important;
+}
+/* Room-count toggle reuses the same radio, laid out horizontally */
+[data-testid="stSidebar"] div[role="radiogroup"][aria-orientation="horizontal"] label {
+    text-align: center; justify-content: center;
+}
+
+/* ── Compact top bar (replaces the old full-width run-status banner) ── */
+.topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.status-pill {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 0.78rem; font-weight: 700;
+    padding: 7px 14px; border-radius: 999px; white-space: nowrap;
+}
+.status-pill.ok   { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
+.status-pill.warn { background: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+.status-pill.err  { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
 
 /* ── Page header ─────────────────────────────────────── */
 .page-header {
@@ -451,7 +497,24 @@ def _yrange(values, pad_frac=0.08):
 
 # ── Data loaders ─────────────────────────────────────────────────────────────────
 DATA_DIR  = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(DATA_DIR, "yad2_raanana_4rooms.json")
+
+# Sale-scale vs. rent-scale price sanity floor. Rent is a monthly figure
+# (~₪3,000-15,000 for this room range), ~100-1000x smaller than sale asking
+# prices — reusing the sale floor here would silently discard every real
+# rental listing as a "typo". Must match yad2_scraper.py's RENT_CFG /
+# SALE_CFG min_sane_price (see the comment there — scraper and dashboard
+# filters are required to agree).
+MIN_SANE_PRICE = {"sale": 500_000, "rent": 1_500}
+
+def deal_path(base_filename, deal_type):
+    """Resolve a deal-type-specific data file path. base_filename is the sale
+    filename (e.g. 'yad2_history.csv'); for deal_type == 'rent' this inserts
+    a '_rent' suffix before the extension, mirroring yad2_scraper.py's
+    DealConfig naming."""
+    if deal_type != "rent":
+        return os.path.join(DATA_DIR, base_filename)
+    root, ext = os.path.splitext(base_filename)
+    return os.path.join(DATA_DIR, f"{root}_rent{ext}")
 
 def parse_price_num(p):
     p = str(p).replace(",", "").replace("₪", "").strip()
@@ -459,8 +522,9 @@ def parse_price_num(p):
     return int(m.group(1)) if m else None
 
 @st.cache_data
-def load_current(_mtime):
-    with open(DATA_FILE, encoding="utf-8") as f:
+def load_current(_mtime, deal_type):
+    data_file = deal_path("yad2_raanana_4rooms.json", deal_type)
+    with open(data_file, encoding="utf-8") as f:
         raw = json.load(f)
     df = pd.DataFrame(raw)
     df["price_num"] = df["price"].apply(parse_price_num)
@@ -471,7 +535,8 @@ def load_current(_mtime):
     # min-price / price-per-m². Non-destructive — the raw data files keep
     # everything; this only affects what the dashboard displays. Listings with a
     # MISSING price or size are kept (e.g. "price on request").
-    _price_ok = df["price_num"].isna() | (df["price_num"] >= 500_000)
+    min_sane_price = MIN_SANE_PRICE.get(deal_type, 500_000)
+    _price_ok = df["price_num"].isna() | (df["price_num"] >= min_sane_price)
     _size_ok  = df["size_sqm"].isna()  | ((df["size_sqm"] >= 25) & (df["size_sqm"] <= 1000))
     df = df[_price_ok & _size_ok].reset_index(drop=True)
     def exf(info, idx):
@@ -480,7 +545,13 @@ def load_current(_mtime):
     df["apt_type"]     = df["info"].apply(lambda x: exf(x, 0) or "דירה")
     df["neighborhood"] = df["info"].apply(lambda x: exf(x, 1))
 
-    fs_path = os.path.join(DATA_DIR, "yad2_first_seen.json")
+    # Dashboard scope is apartments / garden apartments / duplexes only — drop
+    # other Yad2 categories that leak into the search results (roof/penthouse,
+    # private houses, land plots, purchase groups, semi-detached) so they don't
+    # skew KPIs, charts or the table, and don't show up as filter options.
+    df = df[df["apt_type"].isin(["דירה", "דירת גן", "דופלקס"])].reset_index(drop=True)
+
+    fs_path = deal_path("yad2_first_seen.json", deal_type)
     try:
         with open(fs_path, encoding="utf-8") as f:
             first_seen = json.load(f)
@@ -516,8 +587,8 @@ def load_current(_mtime):
     return df
 
 @st.cache_data(ttl=300)
-def load_history():
-    path = os.path.join(DATA_DIR, "yad2_history.csv")
+def load_history(deal_type):
+    path = deal_path("yad2_history.csv", deal_type)
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -531,8 +602,8 @@ def _norm_rooms(df):
     return df
 
 @st.cache_data(ttl=300)
-def load_nb_history():
-    path = os.path.join(DATA_DIR, "yad2_neighborhood_history.csv")
+def load_nb_history(deal_type):
+    path = deal_path("yad2_neighborhood_history.csv", deal_type)
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -540,8 +611,8 @@ def load_nb_history():
     return _norm_rooms(df).sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
-def load_type_history():
-    path = os.path.join(DATA_DIR, "yad2_type_history.csv")
+def load_type_history(deal_type):
+    path = deal_path("yad2_type_history.csv", deal_type)
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -549,8 +620,8 @@ def load_type_history():
     return _norm_rooms(df).sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
-def load_rooms_history():
-    path = os.path.join(DATA_DIR, "yad2_rooms_history.csv")
+def load_rooms_history(deal_type):
+    path = deal_path("yad2_rooms_history.csv", deal_type)
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -559,24 +630,25 @@ def load_rooms_history():
     return df.sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
-def detect_changes():
+def detect_changes(deal_type):
     # Diff against the one-step-behind snapshot so this shows what changed in the
     # MOST RECENT run. yad2_prev_run.json is overwritten with the current data at
     # the end of every scrape (it seeds the next run's diff), so on its own it
     # equals the current snapshot and every count comes out zero. The scraper
     # keeps yad2_prev_display.json as the run-before-this-one; prefer it, and fall
     # back to prev_run.json only until the next scrape creates the display file.
-    prev_file = os.path.join(DATA_DIR, "yad2_prev_display.json")
+    data_file = deal_path("yad2_raanana_4rooms.json", deal_type)
+    prev_file = deal_path("yad2_prev_display.json", deal_type)
     if not os.path.exists(prev_file):
-        prev_file = os.path.join(DATA_DIR, "yad2_prev_run.json")
+        prev_file = deal_path("yad2_prev_run.json", deal_type)
     if not os.path.exists(prev_file):
         return None, None, None, None, None
     with open(prev_file, encoding="utf-8") as f:
         prev_list = json.load(f)
-    with open(DATA_FILE, encoding="utf-8") as f:
+    with open(data_file, encoding="utf-8") as f:
         curr_list = json.load(f)
     prev_time = datetime.fromtimestamp(os.path.getmtime(prev_file)).strftime("%d/%m/%Y %H:%M")
-    curr_time = datetime.fromtimestamp(os.path.getmtime(DATA_FILE)).strftime("%d/%m/%Y %H:%M")
+    curr_time = datetime.fromtimestamp(os.path.getmtime(data_file)).strftime("%d/%m/%Y %H:%M")
     # Compare by listing-ID — yad2 randomizes URL query strings between runs,
     # so URL-keyed comparison would mark ~all listings as both new and removed.
     def _id(u): return (u or "").split("?")[0].rstrip("/").split("/")[-1]
@@ -600,8 +672,8 @@ def detect_changes():
             prev_time, curr_time)
 
 @st.cache_data(ttl=300)
-def load_run_log():
-    path = os.path.join(DATA_DIR, "yad2_run_log.csv")
+def load_run_log(deal_type):
+    path = deal_path("yad2_run_log.csv", deal_type)
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -609,21 +681,21 @@ def load_run_log():
     return df.sort_values("timestamp", ascending=False).reset_index(drop=True)
 
 @st.cache_data(ttl=300)
-def load_first_seen_map():
-    path = os.path.join(DATA_DIR, "yad2_first_seen.json")
+def load_first_seen_map(deal_type):
+    path = deal_path("yad2_first_seen.json", deal_type)
     if not os.path.exists(path):
         return {}
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 @st.cache_data(ttl=300)
-def load_dom_log():
-    path = os.path.join(DATA_DIR, "yad2_dom_log.csv")
+def load_dom_log(deal_type):
+    path = deal_path("yad2_dom_log.csv", deal_type)
     if not os.path.exists(path):
         return pd.DataFrame()
     return pd.read_csv(path, encoding="utf-8-sig")
 
-def build_trends_payload(cur_df, nbh, rooms_sel):
+def build_trends_payload(cur_df, nbh, rooms_sel, deal_type):
     """Live data for the 'מגמות שכונות' page. Sparkline series come from the
     per-(neighborhood × room) history; the CURRENT table values (count, DOM,
     price/m²) are recomputed from the sanity-filtered snapshot so this page
@@ -701,9 +773,10 @@ def build_trends_payload(cur_df, nbh, rooms_sel):
         wd = round(sum(d * c for d, c in cur_doms) / sum(c for _, c in cur_doms), 1)
         if mdom_days and mdom_days[-1] == today_str: mdom_vals[-1] = wd
         else: mdom_days.append(today_str); mdom_vals.append(wd)
+    deal_label = "מכירה" if deal_type == "sale" else "השכרה"
     return {
         "generated": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "rooms_label": f"{rooms_sel} חדרים",
+        "rooms_label": f"{deal_label} · {rooms_sel} חדרים",
         "days": all_days,
         "neighborhoods": out,
         "market_count": mc,
@@ -711,20 +784,38 @@ def build_trends_payload(cur_df, nbh, rooms_sel):
         "market_dom_vals": mdom_vals,
     }
 
+# ── Deal-type toggle (sale/rent) must be readable before data loads, but the
+# widget itself is rendered later (next to the page-nav radio, §2.1 of the
+# rental-tracking plan) — pre-read the session-state key here, standard
+# Streamlit "pre-read + later-render" pattern for a value that gates which
+# files get loaded rather than just masking already-loaded data. ──────────
+st.session_state.setdefault("flt_deal", "sale")
+sel_deal = st.session_state["flt_deal"]
+deal_label = "מכירה" if sel_deal == "sale" else "השכרה"
+
+data_file_path = deal_path("yad2_raanana_4rooms.json", sel_deal)
+if not os.path.exists(data_file_path):
+    st.info("אין עדיין נתוני השכרה — יופיעו לאחר הריצה הראשונה של הסקרייפר." if sel_deal == "rent"
+            else "אין עדיין נתוני מכירה — יופיעו לאחר הריצה הראשונה של הסקרייפר.")
+    st.stop()
+
 # ── Load data ────────────────────────────────────────────────────────────────────
-_mtime    = os.path.getmtime(DATA_FILE)
-df        = load_current(_mtime)
-history   = load_history()
-nb_hist   = load_nb_history()
-type_hist = load_type_history()
-rooms_hist = load_rooms_history()
-run_log   = load_run_log()
-chg      = detect_changes()
+_mtime    = os.path.getmtime(data_file_path)
+df        = load_current(_mtime, sel_deal)
+if len(df) == 0:
+    st.info("אין עדיין מספיק נתונים לתצוגה זו — הם יופיעו לאחר הריצות הבאות.")
+    st.stop()
+history   = load_history(sel_deal)
+nb_hist   = load_nb_history(sel_deal)
+type_hist = load_type_history(sel_deal)
+rooms_hist = load_rooms_history(sel_deal)
+run_log   = load_run_log(sel_deal)
+chg      = detect_changes(sel_deal)
 new_df, rem_df, price_df, prev_time, curr_time = (
     chg if chg[0] is not None
     else (pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), "—", "—")
 )
-mod_time = datetime.fromtimestamp(os.path.getmtime(DATA_FILE)).strftime("%d/%m/%Y %H:%M")
+mod_time = datetime.fromtimestamp(os.path.getmtime(data_file_path)).strftime("%d/%m/%Y %H:%M")
 
 def _hebrew_age(dt):
     """Return a Hebrew 'X ago' string."""
@@ -738,32 +829,9 @@ def _hebrew_age(dt):
     if days < 30:        return f"לפני {days} ימים" if days > 1 else "אתמול"
     return dt.strftime("%d/%m/%Y")
 
-mod_age = _hebrew_age(datetime.fromtimestamp(os.path.getmtime(DATA_FILE)))
+mod_age = _hebrew_age(datetime.fromtimestamp(os.path.getmtime(data_file_path)))
 
-# ── Page navigation: main dashboard ⇄ neighborhood-trends analysis ───────────────
-_page = st.radio("עמוד", ["📊 סקירת שוק", "🏘️ מגמות שכונות"], horizontal=True,
-                 label_visibility="collapsed", key="page_nav")
-if "מגמות שכונות" in _page:
-    trends_rooms = st.radio("חדרים", ["4", "5"], horizontal=True,
-                            format_func=lambda r: f"{r} חדרים",
-                            label_visibility="collapsed", key="trends_rooms")
-    _payload = build_trends_payload(df, nb_hist, trends_rooms)
-    _tpl_path = os.path.join(DATA_DIR, "yad2_trends_page.html")
-    if _payload is None:
-        st.info("אין עדיין מספיק נתונים היסטוריים לעמוד זה — הוא ייבנה עם הריצות הבאות.")
-    elif not os.path.exists(_tpl_path):
-        st.error("קובץ התבנית yad2_trends_page.html חסר.")
-    else:
-        with open(_tpl_path, encoding="utf-8") as _f:
-            _tpl = _f.read()
-        components.html(_tpl.replace("/*__DATA__*/{}", json.dumps(_payload, ensure_ascii=False)),
-                        height=2350, scrolling=True)
-    st.stop()
-
-# ── Page header (placeholder — filled below once fdf is known) ───────────────────
-header_slot = st.empty()
-
-# ── Top filter bar ───────────────────────────────────────────────────────────────
+# ── Filter option lists + defaults (needed by every page) ────────────────────────
 # Sort dropdown values by frequency — rarest first, so unusual options surface easily
 def _by_rarity(series, as_int=False):
     s = series.dropna()
@@ -782,10 +850,9 @@ size_min, size_max   = int(df["size_sqm"].dropna().min()), int(df["size_sqm"].dr
 
 # Defaults for reset
 _defaults = {
-    "flt_price":  (price_min, price_max),
-    "flt_size":   (size_min, size_max),
     "flt_type":   "הכל",
     "flt_rooms":  "4",
+    "flt_deal":   "sale",
     "flt_floor":  "הכל",
     "flt_nb":     "הכל",
     "quick_range": "הכל",
@@ -798,27 +865,108 @@ if st.session_state.get("_reset_filters"):
         st.session_state[k] = v
     st.session_state["_reset_filters"] = False
 
-st.markdown('<div class="filter-bar-wrap"><div class="filter-bar-anchor"></div>', unsafe_allow_html=True)
-fb1, fb2, fb3, fb4, fb5, fb6, fb_reset, _spacer = st.columns([1.4, 1.4, 0.9, 0.7, 0.7, 1, 0.7, 2.3])
-with fb1:
-    price_range = st.slider("טווח מחיר (₪)", price_min, price_max, step=50000, format="%d", key="flt_price")
-with fb2:
-    size_range = st.slider("גודל (מ״ר)", size_min, size_max, key="flt_size")
-with fb3:
-    sel_type = st.selectbox("סוג נכס", ["הכל"] + apt_types, key="flt_type")
-with fb4:
+# ── Sidebar: brand, page navigation, room-count toggle, live status ──────────────
+NAV_PAGES = ["📊 סקירה", "🏘️ מגמות שכונות", "📋 כל המודעות", "🔔 פעילות שוק"]
+NAV_TO_PAGE = {"📊 סקירה": "overview", "🏘️ מגמות שכונות": "trends",
+               "📋 כל המודעות": "listings", "🔔 פעילות שוק": "activity"}
+with st.sidebar:
+    st.markdown("""
+    <div class="sidebar-brand">
+        <div class="brand-mark">
+            <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>
+        </div>
+        <h3>Yad2 Market</h3>
+        <p>רעננה · מעקב נדל״ן</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="nav-label">תצוגות</div>', unsafe_allow_html=True)
+    nav_choice = st.radio("עמוד", NAV_PAGES, label_visibility="collapsed", key="page_nav")
+
+    st.markdown('<div class="nav-label" style="margin-top:16px">עסקה</div>', unsafe_allow_html=True)
+    # Primary dataset switch: sale vs. rent are separate Yad2 feeds/files (not a
+    # value-split of one feed like the room toggle below), so this must be read
+    # BEFORE data loads — see the pre-read block above "Load data". The widget
+    # here just renders the same "flt_deal" session-state key that pre-read
+    # already initialized; global for every page, same as the room toggle.
+    st.radio("עסקה", ["sale", "rent"], horizontal=True,
+             format_func=lambda d: "מכירה" if d == "sale" else "השכרה",
+             label_visibility="collapsed", key="flt_deal")
+
+    st.markdown('<div class="nav-label" style="margin-top:16px">חדרים</div>', unsafe_allow_html=True)
     # Primary view switch: 4-room OR 5-room (bucket "4" = 4/4.5, "5" = 5+).
-    sel_rooms = st.selectbox("חדרים", ["4", "5"],
-                             format_func=lambda r: f"{r} חדרים", key="flt_rooms")
-with fb5:
-    sel_floor = st.selectbox("קומה", ["הכל"] + [str(f) for f in floors_opts], key="flt_floor")
-with fb6:
-    sel_nb = st.selectbox("שכונה", ["הכל"] + nbs, key="flt_nb")
-with fb_reset:
-    if st.button("♺ אפס", help="איפוס כל הפילטרים", use_container_width=True):
-        st.session_state["_reset_filters"] = True
-        st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
+    # Global for every page — including neighborhood trends, which used to have
+    # its own separate room toggle.
+    sel_rooms = st.radio("חדרים", ["4", "5"], horizontal=True,
+                         format_func=lambda r: f"{r} חדרים",
+                         label_visibility="collapsed", key="flt_rooms")
+
+    if len(run_log) > 0:
+        _lr_ok = str(run_log.iloc[0].get("status", "")).lower() != "error"
+        st.markdown(f"""
+        <div class="sidebar-status">
+            <div class="status-live"><span class="live-dot" style="background:{'#10b981' if _lr_ok else '#ef4444'}"></span>
+                {'נתונים חיים' if _lr_ok else 'שגיאה בריצה האחרונה'}</div>
+            <div class="stat-row">עודכן {mod_age}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+page = NAV_TO_PAGE[nav_choice]
+
+# ── Page: neighborhood trends — self-contained, doesn't use the shared filters ───
+if page == "trends":
+    st.markdown(f"""
+    <div class="page-header">
+        <h1>מגמות שכונות · {deal_label} · {sel_rooms} חדרים</h1>
+        <div class="sub">השוואת מלאי, ימים בשוק ומחיר למ״ר בין שכונות</div>
+    </div>
+    """, unsafe_allow_html=True)
+    _payload = build_trends_payload(df, nb_hist, sel_rooms, sel_deal)
+    _tpl_path = os.path.join(DATA_DIR, "yad2_trends_page.html")
+    if _payload is None:
+        st.info("אין עדיין מספיק נתונים היסטוריים לעמוד זה — הוא ייבנה עם הריצות הבאות.")
+    elif not os.path.exists(_tpl_path):
+        st.error("קובץ התבנית yad2_trends_page.html חסר.")
+    else:
+        with open(_tpl_path, encoding="utf-8") as _f:
+            _tpl = _f.read()
+        components.html(_tpl.replace("/*__DATA__*/{}", json.dumps(_payload, ensure_ascii=False)),
+                        height=2350, scrolling=True)
+    st.stop()
+
+# ── Page header (placeholder — filled below once fdf is known) ───────────────────
+header_slot = st.empty()
+
+# ── Top filter bar — shown on Overview & Listings; Activity reads the same ───────
+# session-state values without re-rendering the widgets (its own nav item has no
+# filter row, so the values it needs come from whatever was last set on the other
+# two pages).
+if page in ("overview", "listings"):
+    st.markdown('<div class="filter-bar-wrap"><div class="filter-bar-anchor"></div>', unsafe_allow_html=True)
+    fb3, fb4, fb5, fb_reset, _spacer = st.columns([0.9, 0.9, 1, 0.7, 3.6])
+    with fb3:
+        sel_type = st.selectbox("סוג נכס", ["הכל"] + apt_types, key="flt_type")
+    with fb4:
+        sel_floor = st.selectbox("קומה", ["הכל"] + [str(f) for f in floors_opts], key="flt_floor")
+    with fb5:
+        sel_nb = st.selectbox("שכונה", ["הכל"] + nbs, key="flt_nb")
+    with fb_reset:
+        if st.button("♺ אפס", help="איפוס כל הפילטרים", use_container_width=True):
+            st.session_state["_reset_filters"] = True
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    sel_type    = st.session_state["flt_type"]
+    sel_floor   = st.session_state["flt_floor"]
+    sel_nb      = st.session_state["flt_nb"]
+
+# Price/size range filters were removed from the UI (their slider widgets hit a
+# Streamlit/BaseWeb RTL rendering bug — see yad2_dashboard.py history). The rest
+# of the file still keys its "any filter narrower than the full dataset" checks
+# off price_range/size_range, so keep them as the always-full range rather than
+# threading a bigger refactor through every one of those call sites.
+price_range = (price_min, price_max)
+size_range  = (size_min, size_max)
 
 # ── Apply filters ────────────────────────────────────────────────────────────────
 size_filled = df["size_sqm"].fillna(size_range[0])
@@ -850,1021 +998,1028 @@ fdf.drop(columns="_lid", inplace=True, errors="ignore")
 fdf_dups.drop(columns="_lid", inplace=True, errors="ignore")
 
 # ── Page header ──────────────────────────────────────────────────────────────────
-avg_p   = int(fdf["price_num"].mean())    if len(fdf) else 0
-med_p   = int(fdf["price_num"].median())  if len(fdf) else 0
-min_p   = int(fdf["price_num"].min())     if len(fdf) else 0
-# Price per m² = mean of each listing's price/size (average-of-ratios), matching
-# how the history files and trend charts compute it — so the KPI, the chart and
-# the "vs week" delta all agree. (avg-price ÷ avg-size gave a different number.)
-_valid_pps = fdf[(fdf["size_sqm"] > 0) & fdf["price_num"].notna()] if len(fdf) else fdf
-ppsqm   = int((_valid_pps["price_num"] / _valid_pps["size_sqm"]).mean()) if len(_valid_pps) else 0
-
+_titles = {"overview": "סקירת שוק רעננה", "listings": "כל המודעות", "activity": "פעילות שוק"}
 header_slot.markdown(f"""
 <div class="page-header">
-    <h1>סקירת שוק רעננה · {sel_rooms} חדרים</h1>
+    <h1>{_titles[page]} · {deal_label} · {sel_rooms} חדרים</h1>
     <div class="sub">
         <b>{len(fdf):,}</b> מודעות &nbsp;·&nbsp; עודכן <b>{mod_age}</b> &nbsp;<span style="opacity:0.55">({mod_time})</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Run status banner ────────────────────────────────────────────────────────────
-if len(run_log) > 0:
-    last_run     = run_log.iloc[0]
-    last_status  = str(last_run.get("status", "")).lower()
-    last_ts      = last_run["timestamp"]
-    last_ts_fmt  = last_ts.strftime("%d/%m/%Y %H:%M")
-    hours_ago    = (datetime.now() - last_ts.to_pydatetime()).total_seconds() / 3600
+if page == "overview":
+    avg_p   = int(fdf["price_num"].mean())    if len(fdf) else 0
+    med_p   = int(fdf["price_num"].median())  if len(fdf) else 0
+    min_p   = int(fdf["price_num"].min())     if len(fdf) else 0
+    # Price per m² = mean of each listing's price/size (average-of-ratios), matching
+    # how the history files and trend charts compute it — so the KPI, the chart and
+    # the "vs week" delta all agree. (avg-price ÷ avg-size gave a different number.)
+    _valid_pps = fdf[(fdf["size_sqm"] > 0) & fdf["price_num"].notna()] if len(fdf) else fdf
+    ppsqm   = int((_valid_pps["price_num"] / _valid_pps["size_sqm"]).mean()) if len(_valid_pps) else 0
 
-    if last_status == "error":
-        err_msg = str(last_run.get("error", "") or "שגיאה לא מזוהה")
-        if len(err_msg) > 160: err_msg = err_msg[:160] + "…"
-        st.markdown(f"""
-        <div class="run-status err">
-            <span class="icon">❌</span>
-            <div><b>הריצה האחרונה נכשלה</b> · {last_ts_fmt}<br>
-                 <span style="opacity:0.85;font-size:0.82rem;">{err_msg}</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif hours_ago > 14:
-        st.markdown(f"""
-        <div class="run-status warn">
-            <span class="icon">⚠️</span>
-            <div><b>הריצה האחרונה הייתה לפני {int(hours_ago)} שעות</b> · {last_ts_fmt}<br>
-                 <span style="opacity:0.85;font-size:0.82rem;">ייתכן שה-Scraper לא רץ כמתוכנן</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        n_listings = int(last_run.get("total_listings") or 0)
-        st.markdown(f"""
-        <div class="run-status ok">
-            <span class="icon">✅</span>
-            <div><b>הריצה האחרונה הצליחה</b> · {last_ts_fmt}</div>
-            <span class="meta">{n_listings:,} מודעות נסרקו</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Run status banner ─────────────────────────────────────────────────────
+    if len(run_log) > 0:
+        last_run     = run_log.iloc[0]
+        last_status  = str(last_run.get("status", "")).lower()
+        last_ts      = last_run["timestamp"]
+        last_ts_fmt  = last_ts.strftime("%d/%m/%Y %H:%M")
+        hours_ago    = (datetime.now() - last_ts.to_pydatetime()).total_seconds() / 3600
 
-# ── KPI strip ────────────────────────────────────────────────────────────────────
-def fmt(n): return f"₪{n:,}" if n else "—"
+        if last_status == "error":
+            err_msg = str(last_run.get("error", "") or "שגיאה לא מזוהה")
+            if len(err_msg) > 160: err_msg = err_msg[:160] + "…"
+            st.markdown(f"""
+            <div class="run-status err">
+                <span class="icon">❌</span>
+                <div><b>הריצה האחרונה נכשלה</b> · {last_ts_fmt}<br>
+                     <span style="opacity:0.85;font-size:0.82rem;">{err_msg}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+        elif hours_ago > 14:
+            st.markdown(f"""
+            <div class="run-status warn">
+                <span class="icon">⚠️</span>
+                <div><b>הריצה האחרונה הייתה לפני {int(hours_ago)} שעות</b> · {last_ts_fmt}<br>
+                     <span style="opacity:0.85;font-size:0.82rem;">ייתכן שה-Scraper לא רץ כמתוכנן</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            n_listings = int(last_run.get("total_listings") or 0)
+            st.markdown(f"""
+            <div class="run-status ok">
+                <span class="icon">✅</span>
+                <div><b>הריצה האחרונה הצליחה</b> · {last_ts_fmt}</div>
+                <span class="meta">{n_listings:,} מודעות נסרקו</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-# Compute deltas vs ~7 days ago from market-wide history (best signal we have)
-def _kpi_delta(curr, ref):
-    """Return (html_pill, sub_text). For lower-is-better KPIs flip with `invert`."""
-    if curr is None or ref is None or ref == 0:
-        return ""
-    diff = curr - ref
-    pct  = (diff / ref) * 100 if ref else 0
-    if abs(pct) < 0.05:
-        cls, arrow = "flat", "—"
-    elif diff > 0:
-        cls, arrow = "up", "▲"
-    else:
-        cls, arrow = "down", "▼"
-    return f'<div class="kpi-delta {cls}">{arrow} {abs(pct):.1f}% מול שבוע</div>'
+    # ── KPI strip ──────────────────────────────────────────────────────────────
+    def fmt(n): return f"₪{n:,}" if n else "—"
 
-ref_count = ref_avg = ref_med = ref_pps = None
-# Baseline = the SAME room-count bucket ~7 days ago (rooms_history), so the KPI —
-# which now always reflects one room count (4 or 5) — compares like-for-like.
-_rh = rooms_hist[rooms_hist["rooms"] == sel_rooms] if len(rooms_hist) else rooms_hist
-if len(_rh) > 0:
-    cutoff = pd.Timestamp.now() - pd.Timedelta(days=7)
-    past = _rh[_rh["date"] <= cutoff]
-    ref_row = past.iloc[-1] if len(past) else _rh.iloc[0]
-    ref_count = int(ref_row["count"])               if pd.notna(ref_row.get("count"))             else None
-    ref_avg   = float(ref_row["avg_price"])         if pd.notna(ref_row.get("avg_price"))          else None
-    ref_med   = float(ref_row["median_price"])      if pd.notna(ref_row.get("median_price"))       else None
-    ref_pps   = float(ref_row["avg_price_per_sqm"]) if pd.notna(ref_row.get("avg_price_per_sqm"))  else None
+    # Compute deltas vs ~7 days ago from market-wide history (best signal we have)
+    def _kpi_delta(curr, ref):
+        """Return (html_pill, sub_text). For lower-is-better KPIs flip with `invert`."""
+        if curr is None or ref is None or ref == 0:
+            return ""
+        diff = curr - ref
+        pct  = (diff / ref) * 100 if ref else 0
+        if abs(pct) < 0.05:
+            cls, arrow = "flat", "—"
+        elif diff > 0:
+            cls, arrow = "up", "▲"
+        else:
+            cls, arrow = "down", "▼"
+        return f'<div class="kpi-delta {cls}">{arrow} {abs(pct):.1f}% מול שבוע</div>'
 
-# The room-count baseline above is valid for the plain 4/5 view. But if a FURTHER
-# filter (neighborhood, type, floor, price, size) is active, the KPI reflects a
-# sub-subset while the baseline is the whole bucket — comparing them is bogus, so
-# hide the pills. sel_rooms is intentionally excluded (it has its own baseline).
-is_filtered = (
-    sel_nb != "הכל" or sel_type != "הכל" or sel_floor != "הכל"
-    or price_range != (price_min, price_max) or size_range != (size_min, size_max)
-)
-# A missing pill must still emit a non-blank line: an empty string here would
-# leave a whitespace-only line inside the HTML block, which Markdown treats as a
-# block terminator and then renders the following indented cards as raw text.
-# The spacer keeps the flex card's bottom alignment (like .kpi-delta's margin).
-_spacer = '<div class="kpi-spacer"></div>'
-d_count = _spacer if is_filtered else (_kpi_delta(len(fdf), ref_count) or _spacer)
-d_avg   = _spacer if is_filtered else (_kpi_delta(avg_p,    ref_avg)   or _spacer)
-d_med   = _spacer if is_filtered else (_kpi_delta(med_p,    ref_med)   or _spacer)
-d_pps   = _spacer if is_filtered else (_kpi_delta(ppsqm,    ref_pps)   or _spacer)
+    ref_count = ref_avg = ref_med = ref_pps = None
+    # Baseline = the SAME room-count bucket ~7 days ago (rooms_history), so the KPI —
+    # which now always reflects one room count (4 or 5) — compares like-for-like.
+    _rh = rooms_hist[rooms_hist["rooms"] == sel_rooms] if len(rooms_hist) else rooms_hist
+    if len(_rh) > 0:
+        cutoff = pd.Timestamp.now() - pd.Timedelta(days=7)
+        past = _rh[_rh["date"] <= cutoff]
+        ref_row = past.iloc[-1] if len(past) else _rh.iloc[0]
+        ref_count = int(ref_row["count"])               if pd.notna(ref_row.get("count"))             else None
+        ref_avg   = float(ref_row["avg_price"])         if pd.notna(ref_row.get("avg_price"))          else None
+        ref_med   = float(ref_row["median_price"])      if pd.notna(ref_row.get("median_price"))       else None
+        ref_pps   = float(ref_row["avg_price_per_sqm"]) if pd.notna(ref_row.get("avg_price_per_sqm"))  else None
 
-st.markdown(f"""
-<div class="kpi-strip">
-    <div class="kpi blue">
-        <div class="kpi-head">
-            <div class="kpi-label">מודעות פעילות</div>
-            <div class="kpi-icon">🏠</div>
-        </div>
-        <div class="kpi-value">{len(fdf):,}</div>
-        <div class="kpi-sub">תוצאות מסוננות</div>
-        {d_count}
-    </div>
-    <div class="kpi green">
-        <div class="kpi-head">
-            <div class="kpi-label">מחיר ממוצע</div>
-            <div class="kpi-icon">💰</div>
-        </div>
-        <div class="kpi-value">{fmt(avg_p)}</div>
-        <div class="kpi-sub">ממוצע מחירי מכירה</div>
-        {d_avg}
-    </div>
-    <div class="kpi gray">
-        <div class="kpi-head">
-            <div class="kpi-label">מחיר חציוני</div>
-            <div class="kpi-icon">📊</div>
-        </div>
-        <div class="kpi-value">{fmt(med_p)}</div>
-        <div class="kpi-sub">אמצע השוק</div>
-        {d_med}
-    </div>
-    <div class="kpi orange">
-        <div class="kpi-head">
-            <div class="kpi-label">מחיר מינימום</div>
-            <div class="kpi-icon">⬇️</div>
-        </div>
-        <div class="kpi-value">{fmt(min_p)}</div>
-        <div class="kpi-sub">המחיר הנמוך ביותר</div>
-        <div class="kpi-spacer"></div>
-    </div>
-    <div class="kpi purple">
-        <div class="kpi-head">
-            <div class="kpi-label">מחיר למ״ר</div>
-            <div class="kpi-icon">📐</div>
-        </div>
-        <div class="kpi-value">{fmt(ppsqm)}</div>
-        <div class="kpi-sub">ממוצע למטר רבוע</div>
-        {d_pps}
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── Section: Charts ──────────────────────────────────────────────────────────────
-quick_range = "הכל"
-
-chart_nb   = sel_nb
-chart_type = sel_type
-
-if len(history) == 0:
-    st.markdown('<div class="info-notice">גרפים יופיעו לאחר מספר ריצות של ה-Scraper.</div>', unsafe_allow_html=True)
-else:
-    # Apply time-range filter to all history sources
-    def _within_range(df_in, days):
-        if df_in is None or len(df_in) == 0 or days is None:
-            return df_in
-        cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
-        return df_in[df_in["date"] >= cutoff]
-
-    range_days = {"30 ימים": 30, "7 ימים": 7}.get(quick_range)
-    history_f = _within_range(history,   range_days)
-    nb_hist_f = _within_range(nb_hist,   range_days)
-    type_hist_f = _within_range(type_hist, range_days)
-    rooms_hist_f = _within_range(rooms_hist, range_days)
-    # Neighborhood/type history is now split by room bucket — keep only the
-    # selected room count so those charts honor the 4/5 toggle (no mixed line).
-    if len(nb_hist_f) and "rooms" in nb_hist_f.columns:
-        nb_hist_f = nb_hist_f[nb_hist_f["rooms"] == sel_rooms]
-    if len(type_hist_f) and "rooms" in type_hist_f.columns:
-        type_hist_f = type_hist_f[type_hist_f["rooms"] == sel_rooms]
-
-    using_nb   = chart_nb   != "הכל" and len(nb_hist_f)   > 0
-    using_type = chart_type != "הכל" and len(type_hist_f) > 0
-    rooms_src  = (rooms_hist_f[rooms_hist_f["rooms"] == sel_rooms].sort_values("date")
-                  if len(rooms_hist_f) else rooms_hist_f)
-    using_rooms = len(rooms_src) > 0
-
-    if using_nb and using_type:
-        # Both filters active: type drives both qty and price
-        # (no per-(nb × type) history file is tracked, so we pick one — type is what most users compare)
-        src = type_hist_f[type_hist_f["apt_type"] == chart_type].sort_values("date")
-        qty_x,   qty_y   = src["date"], src["count"]
-        price_x, price_y = src["date"], src["avg_price_per_sqm"]
-        scope_label = f"{chart_nb} · {chart_type}"
-    elif using_nb:
-        src = nb_hist_f[nb_hist_f["neighborhood"] == chart_nb].sort_values("date")
-        qty_x, qty_y     = src["date"], src["count"]
-        price_x, price_y = src["date"], src["avg_price_per_sqm"]
-        scope_label = chart_nb
-    elif using_type:
-        src = type_hist_f[type_hist_f["apt_type"] == chart_type].sort_values("date")
-        qty_x, qty_y     = src["date"], src["count"]
-        price_x, price_y = src["date"], src["avg_price_per_sqm"]
-        scope_label = chart_type
-    elif using_rooms:
-        # Default view: the selected room-count's own trend line.
-        qty_x, qty_y     = rooms_src["date"], rooms_src["count"]
-        price_x, price_y = rooms_src["date"], rooms_src["avg_price_per_sqm"]
-        scope_label = f"{sel_rooms} חדרים"
-    else:
-        qty_x, qty_y     = history["date"], history["כמות"]
-        price_x, price_y = history["date"], history["avg_price_per_sqm"]
-        scope_label = f"{sel_rooms} חדרים"
-
-    # Narrowing filters that the pre-aggregated history files can't slice by.
-    # (sel_rooms is NOT here — it has its own per-room-count history.)
-    any_narrow_filter = (
-        sel_floor != "הכל" or
-        price_range != (price_min, price_max) or
-        size_range != (size_min, size_max)
+    # The room-count baseline above is valid for the plain 4/5 view. But if a FURTHER
+    # filter (neighborhood, type, floor, price, size) is active, the KPI reflects a
+    # sub-subset while the baseline is the whole bucket — comparing them is bogus, so
+    # hide the pills. sel_rooms is intentionally excluded (it has its own baseline).
+    is_filtered = (
+        sel_nb != "הכל" or sel_type != "הכל" or sel_floor != "הכל"
+        or price_range != (price_min, price_max) or size_range != (size_min, size_max)
     )
-
-    active_filters = [f for f in [chart_nb if using_nb else "", chart_type if using_type else "", quick_range if quick_range != "הכל" else ""] if f]
-    if active_filters:
-        st.markdown(f'<div class="filter-hint">מסונן לפי: <b>{" · ".join(active_filters)}</b></div>', unsafe_allow_html=True)
-
-    gc1, gc2 = st.columns(2, gap="medium")
-
-    # ── Chart 1: Listing quantity over time ──────────────────────────────────────
-    with gc1:
-        qty_label = scope_label if not any_narrow_filter else f"{scope_label} · פילוח חי"
-        st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות 4-5 חדרים פעילות היו בכל יום. עלייה = יותר היצע, ירידה = פחות היצע (יותר נסגרו ממה שנפתחו).">ⓘ</span>כמות מודעות לאורך זמן</div><div class="card-desc">{qty_label}</div>', unsafe_allow_html=True)
-        if any_narrow_filter:
-            # Pre-aggregated history can't be sliced by price/size/rooms/floor — show today's filtered count only
-            st.markdown(
-                f'<p style="color:#0f172a;font-size:2rem;font-weight:800;padding:18px 0 4px;">{len(fdf):,} מודעות</p>'
-                f'<p style="color:#475569;font-size:0.84rem;">תואמות את הפילטרים · היסטוריה לפי מחיר/גודל/חדרים/קומה אינה נשמרת</p>',
-                unsafe_allow_html=True)
-        else:
-            qty_color = CYAN
-            fig_qty = go.Figure()
-            _qx, _qy = _daily(qty_x, qty_y)
-            fig_qty.add_trace(go.Scatter(
-                x=_qx, y=_qy,
-                mode="lines+markers+text",
-                line=dict(color=qty_color, width=2.8, shape="spline", smoothing=0.3),
-                marker=dict(size=7, color=qty_color, line=dict(color="#ffffff", width=2)),
-                text=_sparse_labels(_qy, lambda v: f"{int(v):,}"),
-                textposition="top center",
-                textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
-                cliponaxis=False,
-                hovertemplate="<b>%{x}</b><br>%{y} מודעות<extra></extra>"
-            ))
-            _chart(fig_qty, 280)
-            qty_rng = _yrange(_qy)
-            fig_qty.update_layout(yaxis_title="מודעות",
-                                  xaxis=dict(type="category", fixedrange=True,
-                                             categoryorder="array", categoryarray=list(_qx)),
-                                  yaxis=dict(range=qty_rng, fixedrange=True,
-                                             gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
-            st.plotly_chart(fig_qty, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── Chart 2: Avg price per sqm over time ─────────────────────────────────────
-    with gc2:
-        st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="מחיר ממוצע לכל מ״ר על פני כל המודעות הפעילות. זה האינדיקטור הכי טוב למחיר נטו של השוק (מנטרל הבדלי גודל).">ⓘ</span>מחיר ממוצע למ״ר לאורך זמן</div><div class="card-desc">{scope_label} — עולה/יורד = התייקרות/הוזלה</div>', unsafe_allow_html=True)
-        # Brand blue line; the up/down trend is already carried by the KPI delta
-        # pill and the card description, so the line stays on-brand rather than
-        # flashing red whenever prices tick up.
-        p_color, fill_col = CYAN, "rgba(37,99,235,0.07)"
-        fig_price = go.Figure()
-        _px, _py = _daily(price_x, price_y, agg="mean")
-        fig_price.add_trace(go.Scatter(
-            x=_px, y=_py,
-            mode="lines+markers+text",
-            line=dict(color=p_color, width=2.8, shape="spline", smoothing=0.3),
-            marker=dict(size=7, color=p_color, line=dict(color="#ffffff", width=2)),
-            text=_sparse_labels(_py, lambda v: f"₪{int(v):,}"),
-            textposition="top center",
-            textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
-            cliponaxis=False,
-            hovertemplate="<b>%{x}</b><br>₪%{y:,.0f}/מ״ר<extra></extra>"
-        ))
-        _chart(fig_price, 280)
-        p_rng = _yrange(_py)
-        fig_price.update_layout(yaxis_title="₪/מ״ר",
-                                xaxis=dict(type="category", fixedrange=True,
-                                           categoryorder="array", categoryarray=list(_px)),
-                                yaxis=dict(range=p_rng, tickformat=",d", fixedrange=True,
-                                           gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
-        st.plotly_chart(fig_price, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── Chart 5: Avg days on market over time ────────────────────────────────
-    st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
-    gc5, gc6 = st.columns(2, gap="medium")
-    with gc5:
-        st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="DOM = Days On Market. כמה ימים בממוצע מודעה כבר באוויר. עלייה = מודעות נתקעות (השוק מאט), ירידה = מתחלפות מהר (השוק חם).">ⓘ</span>ממוצע ימים בשוק לאורך זמן</div><div class="card-desc">DOM ממוצע של כל המודעות הפעילות · {scope_label}</div>', unsafe_allow_html=True)
-
-        # ONLY use avg_active_dom (avg DOM of currently active listings).
-        # Skip the old avg_dom column entirely — it's a different metric (DOM of removed only).
-        # Source priority: per-neighborhood → per-type → market-wide. Hide the line entirely
-        # if a narrow filter (price/size/rooms/floor) is active, since none of the histories slice by those.
-        xs, ys = [], []
-        dom_src = None
-        if not any_narrow_filter:
-            if sel_nb != "הכל" and "avg_active_dom" in nb_hist_f.columns:
-                dom_src = nb_hist_f[nb_hist_f["neighborhood"] == sel_nb]
-            elif sel_type != "הכל" and "avg_active_dom" in type_hist_f.columns:
-                dom_src = type_hist_f[type_hist_f["apt_type"] == sel_type]
-            elif sel_nb == "הכל" and sel_type == "הכל" and len(rooms_src) and "avg_active_dom" in rooms_src.columns:
-                dom_src = rooms_src
-        if dom_src is not None and len(dom_src):
-            hd = dom_src.dropna(subset=["avg_active_dom"]).copy()
-            hd["avg_active_dom"] = pd.to_numeric(hd["avg_active_dom"], errors="coerce")
-            hd = hd[hd["avg_active_dom"] > 0]
-            if len(hd):
-                _ddx, _ddy = _daily(hd["date"], hd["avg_active_dom"], agg="mean")
-                xs, ys = list(_ddx), list(_ddy)
-
-        # Live point reflects the active filters via fdf
-        live_dom = fdf["ימים_בשוק"].dropna()
-        live_dom = live_dom[live_dom >= 0]
-        live_avg = float(live_dom.mean()) if len(live_dom) else None
-
-        today_str = datetime.now().strftime("%d/%m/%y")
-        if live_avg is not None and (not xs or xs[-1] != today_str):
-            xs.append(today_str); ys.append(round(live_avg, 1))
-
-        if len(xs) >= 2:
-            fig_dom = go.Figure(go.Scatter(
-                x=xs, y=ys,
-                mode="lines+markers+text",
-                line=dict(color=CYAN2, width=2.8, shape="spline", smoothing=0.3),
-                marker=dict(size=7, color=CYAN2, line=dict(color="#ffffff", width=2)),
-                text=_sparse_labels(ys, lambda v: f"{v:.0f}"),
-                textposition="top center",
-                textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
-                cliponaxis=False,
-                hovertemplate="<b>%{x}</b><br>%{y:.1f} ימים<extra></extra>"
-            ))
-            _chart(fig_dom, 300)
-            dom_rng = _yrange(ys)
-            fig_dom.update_layout(yaxis_title="ימים",
-                                  xaxis=dict(type="category", fixedrange=True,
-                                             categoryorder="array", categoryarray=list(xs)),
-                                  yaxis=dict(range=dom_rng, fixedrange=True,
-                                             gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
-            st.plotly_chart(fig_dom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
-        elif len(xs) == 1:
-            st.markdown(f'<p style="color:#0f172a;font-size:1.4rem;font-weight:800;padding:16px 0 4px;">{ys[0]:.1f} ימים בממוצע</p><p style="color:#475569;font-size:0.84rem;">המגמה תיווצר עם ריצות נוספות של ה-Scraper</p>', unsafe_allow_html=True)
-        else:
-            st.markdown('<p style="color:#475569;padding:24px 0;">זמין לאחר ריצת ה-Scraper.</p>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with gc6:
-        # Avg DOM per neighborhood (mean days on market by area)
-        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="ממוצע ימים בשוק לכל שכונה. עמודה גוהה = השכונה איטית למכור, נמוכה = מודעות מתחלפות מהר.">ⓘ</span>ממוצע ימים בשוק לפי שכונה</div><div class="card-desc">DOM ממוצע פר שכונה (מסונן)</div>', unsafe_allow_html=True)
-        nb_dom = (fdf[fdf["ימים_בשוק"] >= 0]
-                    .groupby("neighborhood")
-                    .agg(avg_dom=("ימים_בשוק", "mean"),
-                         n=("ימים_בשוק", "size"))
-                    .reset_index())
-        nb_dom = nb_dom[(nb_dom["neighborhood"] != "") & (nb_dom["n"] >= 2)]
-        nb_dom = nb_dom.sort_values("avg_dom", ascending=True)
-        if len(nb_dom):
-            # Solid brand blue — the bar length and the sort order already encode
-            # days-on-market, so colour stays a single on-brand hue instead of a
-            # red/amber/green traffic-light.
-            fig_nbdom = go.Figure(go.Bar(
-                x=nb_dom["avg_dom"].round(1),
-                y=nb_dom["neighborhood"],
-                orientation="h",
-                marker=dict(color=CYAN, line=dict(width=0)),
-                text=[f"{d:.0f} ימים · {int(n)} דירות" for d, n in zip(nb_dom["avg_dom"], nb_dom["n"])],
-                textposition="inside",
-                insidetextanchor="middle",
-                textfont=dict(size=12, color="white", family="Heebo, Inter, sans-serif"),
-                customdata=nb_dom["n"],
-                hovertemplate="<b>%{y}</b><br>%{x:.1f} ימים בממוצע<br>%{customdata} דירות למכירה<extra></extra>",
-            ))
-            _chart(fig_nbdom, max(300, len(nb_dom) * 26))
-            fig_nbdom.update_layout(
-                xaxis_title="ימים", yaxis_title="",
-                xaxis=dict(fixedrange=True, gridcolor="#f1f5f9",
-                           tickfont=dict(color="#475569", size=11)),
-                yaxis=dict(fixedrange=True, gridcolor="rgba(0,0,0,0)",
-                           tickfont=dict(color="#0f172a", size=11), automargin=True),
-                bargap=0.25,
-            )
-            st.plotly_chart(fig_nbdom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
-        else:
-            st.markdown('<p style="color:#475569;padding:24px 0;">אין מספיק נתונים לפילוח לפי שכונה.</p>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── New / Removed listings per DAY (deduped by listing ID) ─────────────
-    # Uses first_seen.json + dom_log.csv (canonical sources, not run_log which double-counts)
-    st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
-    gc7, gc8 = st.columns(2, gap="medium")
-
-    def _lid(u):
-        return (u or "").split("?")[0].rstrip("/").split("/")[-1]
-
-    fs_map = load_first_seen_map()
-    # Aggregate first_seen by listing-ID → earliest date per ID, then count by date.
-    # After the listing-ID migration, fs_map keys are already listing-IDs but we
-    # still apply _lid() defensively (no-op) so the legacy URL-keyed format also
-    # works if someone restores an old backup.
-    by_lid = {}
-    for k, dt in fs_map.items():
-        lid = _lid(k)
-        if not lid or not dt: continue
-        if lid not in by_lid or dt < by_lid[lid]:
-            by_lid[lid] = dt
-    new_by_date = pd.Series(list(by_lid.values())).value_counts().sort_index() if by_lid else pd.Series(dtype=int)
-    # Hide the baseline scrape date — every listing alive at first scrape gets
-    # marked first_seen=that-date, which is not "new listings" in the sales sense.
-    # Use the earliest date in run_log as the baseline, and drop it from the chart.
-    if len(run_log) > 0 and len(new_by_date) > 1:
-        baseline_date = pd.to_datetime(run_log["timestamp"]).min().strftime("%Y-%m-%d")
-        if baseline_date in new_by_date.index:
-            new_by_date = new_by_date.drop(baseline_date)
-
-    dom_df_full = load_dom_log()
-    if not dom_df_full.empty and "removed_date" in dom_df_full.columns:
-        dom_dedup = dom_df_full.copy()
-        dom_dedup["_lid"] = dom_dedup["url"].apply(_lid)
-        # one removal event per unique listing per date
-        dom_dedup = dom_dedup[dom_dedup["_lid"] != ""].drop_duplicates(subset=["_lid", "removed_date"])
-        # Drop listings that are currently active — those "removals" are
-        # legacy URL-keyed false positives (yad2 randomized URL query strings,
-        # so the same listing kept getting flagged as removed and re-added).
-        active_ids = {_lid(u) for u in df["url"] if u}
-        dom_dedup = dom_dedup[~dom_dedup["_lid"].isin(active_ids)]
-        # For listings that were really removed (don't exist now), keep only the
-        # LATEST removal date — earlier ones are URL-form changes, not real exits.
-        dom_dedup = dom_dedup.sort_values("removed_date").drop_duplicates(subset=["_lid"], keep="last")
-        rem_by_date = dom_dedup.groupby("removed_date").size().sort_index()
-    else:
-        rem_by_date = pd.Series(dtype=int)
-
-    with gc7:
-        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות נראו לראשונה ביום נתון. מקור: yad2_first_seen.json. ספירה לפי מזהה מודעה (לא URL מלא), כך שכפילויות booster לא נספרות. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות חדשות שנוספו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
-        if len(new_by_date):
-            fig_new = go.Figure(go.Bar(
-                x=new_by_date.index, y=new_by_date.values,
-                marker=dict(color=GREEN, line=dict(width=0)),
-                text=[f"+{int(v)}" for v in new_by_date.values],
-                textposition="outside",
-                textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
-                cliponaxis=False,
-                hovertemplate="<b>%{x}</b><br>+%{y} מודעות חדשות<extra></extra>",
-            ))
-            _chart(fig_new, 280)
-            fig_new.update_layout(yaxis_title="מודעות", bargap=0.3,
-                                  xaxis=dict(type="category", fixedrange=True,
-                                             categoryorder="category ascending"))
-            new_event = st.plotly_chart(
-                fig_new, use_container_width=True,
-                config=dict(displayModeBar=False, scrollZoom=False),
-                on_select="rerun", key="chart_new_listings",
-                selection_mode="points",
-            )
-        else:
-            new_event = None
-            st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני first_seen.</p>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with gc8:
-        st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות הוסרו מהשוק ביום נתון (נמכרו או הוסרו). מקור: yad2_dom_log.csv, מנוקה מכפילויות booster. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות שהוסרו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
-        if len(rem_by_date):
-            fig_rem = go.Figure(go.Bar(
-                x=rem_by_date.index, y=rem_by_date.values,
-                marker=dict(color=RED, line=dict(width=0)),
-                text=[f"-{int(v)}" for v in rem_by_date.values],
-                textposition="outside",
-                textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
-                cliponaxis=False,
-                hovertemplate="<b>%{x}</b><br>-%{y} מודעות הוסרו<extra></extra>",
-            ))
-            _chart(fig_rem, 280)
-            fig_rem.update_layout(yaxis_title="מודעות", bargap=0.3,
-                                  xaxis=dict(type="category", fixedrange=True,
-                                             categoryorder="category ascending"))
-            rem_event = st.plotly_chart(
-                fig_rem, use_container_width=True,
-                config=dict(displayModeBar=False, scrollZoom=False),
-                on_select="rerun", key="chart_removed_listings",
-                selection_mode="points",
-            )
-        else:
-            rem_event = None
-            st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני dom_log.</p>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── Drill-down: clicking a bar above shows the listings for that day ─────
-    def _click_date(event):
-        try:
-            pts = event.selection.points if event else []
-            return str(pts[0]["x"]) if pts else None
-        except Exception:
-            return None
-
-    new_click_date = _click_date(new_event)
-    rem_click_date = _click_date(rem_event)
-
-    if new_click_date or rem_click_date:
-        st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
-        fs_map = load_first_seen_map()
-        dom_full = load_dom_log()
-
-        # Build details ONLY from the filtered active listings (fdf) so the
-        # drill-down respects the filter bar above. Removed listings come from
-        # dom_log filtered by neighborhood/type/price/size where those columns
-        # exist in dom_log; rooms/floor aren't tracked there so those filters
-        # only apply to active listings.
-        details_by_lid = {}
-        for _, r in fdf.iterrows():
-            u = r.get("url") or ""
-            if not u: continue
-            li = _lid(u)
-            details_by_lid[li] = {
-                "מחיר": r.get("price", ""),
-                "שכונה": r.get("neighborhood", "") or (str(r.get("info","")).split(",")[1].strip()
-                                                       if len(str(r.get("info","")).split(",")) >= 3 else ""),
-                "סוג": r.get("apt_type", ""),
-                "חדרים": r.get("rooms", ""),
-                "קומה": r.get("floor", ""),
-                'מ"ר': r.get("size_sqm", ""),
-                "קישור": u,
-                "סטטוס": "פעיל",
-            }
-        if not dom_full.empty:
-            dom_filtered = dom_full.copy()
-            # Apply the filter-bar selections to dom_log rows where the
-            # corresponding columns exist.
-            if sel_nb != "הכל" and "neighborhood" in dom_filtered.columns:
-                dom_filtered = dom_filtered[dom_filtered["neighborhood"] == sel_nb]
-            if sel_type != "הכל" and "apt_type" in dom_filtered.columns:
-                dom_filtered = dom_filtered[dom_filtered["apt_type"] == sel_type]
-            if "price" in dom_filtered.columns:
-                dom_pn = dom_filtered["price"].astype(str).apply(parse_price_num)
-                dom_filtered = dom_filtered[dom_pn.between(price_range[0], price_range[1]) | dom_pn.isna()]
-            if "size_sqm" in dom_filtered.columns:
-                dom_sz = pd.to_numeric(dom_filtered["size_sqm"], errors="coerce").fillna(size_range[0])
-                dom_filtered = dom_filtered[dom_sz.between(size_range[0], size_range[1])]
-            for _, r in dom_filtered.iterrows():
-                u = r.get("url") or ""
-                li = _lid(u)
-                if not li or li in details_by_lid: continue
-                details_by_lid[li] = {
-                    "מחיר": r.get("price", ""),
-                    "שכונה": r.get("neighborhood", ""),
-                    "סוג": r.get("apt_type", ""),
-                    "חדרים": "",
-                    "קומה": "",
-                    'מ"ר': r.get("size_sqm", ""),
-                    "קישור": u,
-                    "סטטוס": "הוסר",
-                }
-
-        if new_click_date:
-            ids_for_date = [_lid(k) for k, d in fs_map.items() if d == new_click_date]
-            rows = [details_by_lid[li] for li in ids_for_date if li in details_by_lid]
-            st.markdown(f'<div class="section-title">דירות שנוספו ב־{new_click_date} ({len(rows)})</div>',
-                        unsafe_allow_html=True)
-            if rows:
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-            else:
-                st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
-
-        if rem_click_date and not dom_full.empty:
-            # Start from the already-filtered dom rows so the drill-down honors
-            # the filter bar. active_ids_now is global (any current listing
-            # blocks it from being a "real removal") regardless of filters.
-            dom_for_date = dom_filtered.copy()
-            dom_for_date["_lid"] = dom_for_date["url"].astype(str).apply(_lid)
-            dom_for_date = dom_for_date[dom_for_date["_lid"] != ""]
-            dom_for_date = dom_for_date.drop_duplicates(subset=["_lid", "removed_date"])
-            active_ids_now = {_lid(u) for u in df["url"] if u}
-            dom_for_date = dom_for_date[~dom_for_date["_lid"].isin(active_ids_now)]
-            dom_for_date = dom_for_date.sort_values("removed_date").drop_duplicates(subset=["_lid"], keep="last")
-            dom_for_date = dom_for_date[dom_for_date["removed_date"] == rem_click_date]
-            rem_rows = []
-            for _, r in dom_for_date.iterrows():
-                rem_rows.append({
-                    "מחיר": r.get("price", ""),
-                    "שכונה": r.get("neighborhood", ""),
-                    "סוג": r.get("apt_type", ""),
-                    'מ"ר': r.get("size_sqm", ""),
-                    "ימים בשוק": r.get("dom_days", ""),
-                    "נראה לראשונה": r.get("first_seen", ""),
-                    "קישור": r.get("url", ""),
-                })
-            st.markdown(f'<div class="section-title">דירות שהוסרו ב־{rem_click_date} ({len(rem_rows)})</div>',
-                        unsafe_allow_html=True)
-            if rem_rows:
-                st.dataframe(pd.DataFrame(rem_rows), use_container_width=True, hide_index=True)
-            else:
-                st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
-
-# ── Section: Changes ─────────────────────────────────────────────────────────────
-st.markdown('<div class="section-title" style="margin-top:18px">מה השתנה מאז העדכון הקודם</div>', unsafe_allow_html=True)
-
-if chg[0] is None:
-    st.markdown('<div class="info-notice">נדרשות לפחות 2 ריצות לזיהוי שינויים.</div>', unsafe_allow_html=True)
-else:
-    # Apply the active filter bar to the change tables/tiles so this section honors filters too
-    def _apply_filters(d):
-        if d is None or len(d) == 0:
-            return d
-        d = d.copy()
-        if "price" in d.columns:
-            d["_pn"] = d["price"].apply(parse_price_num)
-        else:
-            d["_pn"] = None
-        d["_sz"] = pd.to_numeric(d.get("size_sqm"), errors="coerce")
-        d["_rm"] = pd.to_numeric(d.get("rooms"),    errors="coerce")
-        d["_fl"] = pd.to_numeric(d.get("floor"),    errors="coerce")
-        d["_nb"] = d.get("info", "").apply(lambda x: (str(x).split(",")[1].strip() if len(str(x).split(",")) > 1 else "")) if "info" in d.columns else ""
-        d["_tp"] = d.get("info", "").apply(lambda x: (str(x).split(",")[0].strip() if str(x) else ""))           if "info" in d.columns else ""
-        m = pd.Series(True, index=d.index)
-        if d["_pn"].notna().any():
-            m &= d["_pn"].between(price_range[0], price_range[1]) | d["_pn"].isna()
-        m &= d["_sz"].fillna(size_range[0]).between(size_range[0], size_range[1])
-        if sel_type  != "הכל" and "_tp" in d.columns: m &= d["_tp"] == sel_type
-        if sel_nb    != "הכל" and "_nb" in d.columns: m &= d["_nb"] == sel_nb
-        if sel_rooms == "5": m &= d["_rm"] >= 5
-        else:                m &= (d["_rm"] >= 4) & (d["_rm"] < 5)
-        if sel_floor != "הכל": m &= d["_fl"] == int(sel_floor)
-        return d[m].drop(columns=["_pn","_sz","_rm","_fl","_nb","_tp"], errors="ignore")
-
-    new_df   = _apply_filters(new_df)
-    rem_df   = _apply_filters(rem_df)
-    price_df = _apply_filters(price_df)
-
-    cuts_n  = len(price_df[price_df["delta"] < 0]) if len(price_df) else 0
-    rises_n = len(price_df[price_df["delta"] > 0]) if len(price_df) else 0
-
-    # Count "uniquely new" — listings whose first_seen date matches the current run date
-    fs_path = os.path.join(DATA_DIR, "yad2_first_seen.json")
-    try:
-        with open(fs_path, encoding="utf-8") as _f:
-            _first_seen = json.load(_f)
-    except Exception:
-        _first_seen = {}
-    curr_date = datetime.fromtimestamp(os.path.getmtime(DATA_FILE)).strftime("%Y-%m-%d")
-    if len(new_df) > 0:
-        unique_new = sum(1 for u in new_df.get("url", []) if _first_seen.get(u or "", "") == curr_date)
-    else:
-        unique_new = 0
-    total_ever = len(_first_seen)
+    # A missing pill must still emit a non-blank line: an empty string here would
+    # leave a whitespace-only line inside the HTML block, which Markdown treats as a
+    # block terminator and then renders the following indented cards as raw text.
+    # The spacer keeps the flex card's bottom alignment (like .kpi-delta's margin).
+    _spacer = '<div class="kpi-spacer"></div>'
+    d_count = _spacer if is_filtered else (_kpi_delta(len(fdf), ref_count) or _spacer)
+    d_avg   = _spacer if is_filtered else (_kpi_delta(avg_p,    ref_avg)   or _spacer)
+    d_med   = _spacer if is_filtered else (_kpi_delta(med_p,    ref_med)   or _spacer)
+    d_pps   = _spacer if is_filtered else (_kpi_delta(ppsqm,    ref_pps)   or _spacer)
 
     st.markdown(f"""
-    <div class="delta-row">
-        <div class="delta-tile"><div class="d-label">מודעות חדשות</div><div class="d-value green">+{len(new_df)}</div><div class="d-sub">מתוכן <b>{unique_new}</b> חדשות לחלוטין · מאז {prev_time}</div></div>
-        <div class="delta-tile"><div class="d-label">הוסרו / נמכרו</div><div class="d-value red">-{len(rem_df)}</div><div class="d-sub">יצאו מהשוק</div></div>
-        <div class="delta-tile"><div class="d-label">הורדות מחיר</div><div class="d-value green">{cuts_n}</div><div class="d-sub">מחיר הופחת</div></div>
-        <div class="delta-tile"><div class="d-label">עליות מחיר</div><div class="d-value red">{rises_n}</div><div class="d-sub">מחיר עלה</div></div>
+    <div class="kpi-strip">
+        <div class="kpi blue">
+            <div class="kpi-head">
+                <div class="kpi-label">מודעות פעילות</div>
+                <div class="kpi-icon">🏠</div>
+            </div>
+            <div class="kpi-value">{len(fdf):,}</div>
+            <div class="kpi-sub">תוצאות מסוננות</div>
+            {d_count}
+        </div>
+        <div class="kpi green">
+            <div class="kpi-head">
+                <div class="kpi-label">מחיר ממוצע</div>
+                <div class="kpi-icon">💰</div>
+            </div>
+            <div class="kpi-value">{fmt(avg_p)}</div>
+            <div class="kpi-sub">{"ממוצע מחירי מכירה" if sel_deal == "sale" else "ממוצע דמי שכירות"}</div>
+            {d_avg}
+        </div>
+        <div class="kpi gray">
+            <div class="kpi-head">
+                <div class="kpi-label">מחיר חציוני</div>
+                <div class="kpi-icon">📊</div>
+            </div>
+            <div class="kpi-value">{fmt(med_p)}</div>
+            <div class="kpi-sub">אמצע השוק</div>
+            {d_med}
+        </div>
+        <div class="kpi orange">
+            <div class="kpi-head">
+                <div class="kpi-label">מחיר מינימום</div>
+                <div class="kpi-icon">⬇️</div>
+            </div>
+            <div class="kpi-value">{fmt(min_p)}</div>
+            <div class="kpi-sub">המחיר הנמוך ביותר</div>
+            <div class="kpi-spacer"></div>
+        </div>
+        <div class="kpi purple">
+            <div class="kpi-head">
+                <div class="kpi-label">מחיר למ״ר</div>
+                <div class="kpi-icon">📐</div>
+            </div>
+            <div class="kpi-value">{fmt(ppsqm)}</div>
+            <div class="kpi-sub">ממוצע למטר רבוע</div>
+            {d_pps}
+        </div>
     </div>
-    <div class="filter-hint" style="margin-bottom:18px">סך-כל המודעות הייחודיות שראינו אי-פעם: <b>{total_ever:,}</b></div>
     """, unsafe_allow_html=True)
 
-    def chg_table(data, mode="normal"):
-        if data is None or len(data) == 0:
-            st.markdown('<p style="color:#aeaeb2;font-size:0.84rem;padding:8px 0;">אין נתונים.</p>', unsafe_allow_html=True)
-            return
-        rows = ""
-        for _, r in data.iterrows():
-            url  = r.get("url", "#") or "#"
-            pr   = r.get("price", "—")
-            st_v = r.get("street", "—") or "—"
-            nb   = r.get("neighborhood", "—") or "—"
-            sz   = f"{int(r['size_sqm'])} m²" if pd.notna(r.get("size_sqm")) else "—"
-            lnk  = f'<a class="open-btn" href="{url}" target="_blank">פתח</a>'
-            if mode == "delta":
-                d = r["delta"]; pct = r["delta_pct"]; pp = r.get("prev_price", "—")
-                cls = "down" if d < 0 else "up"
-                arrow = "▼" if d < 0 else "▲"
-                ds = f'<span class="{cls}">{arrow} ₪{abs(int(d)):,} ({abs(pct)}%)</span>'
-                rows += f"<tr><td class='muted'>{pp}</td><td>{pr}</td><td>{ds}</td><td>{st_v}</td><td>{nb}</td><td class='muted'>{sz}</td><td>{lnk}</td></tr>"
-            else:
-                rows += f"<tr><td>{pr}</td><td>{st_v}</td><td>{nb}</td><td class='muted'>{sz}</td><td>{lnk}</td></tr>"
-        hdr = ("<tr><th>מחיר קודם</th><th>מחיר חדש</th><th>שינוי</th><th>רחוב</th><th>שכונה</th><th>שטח</th><th></th></tr>"
-               if mode == "delta" else
-               "<tr><th>מחיר</th><th>רחוב</th><th>שכונה</th><th>שטח</th><th></th></tr>")
-        st.markdown(f'<div style="overflow-x:auto"><table class="chg-tbl"><thead>{hdr}</thead><tbody>{rows}</tbody></table></div>',
-                    unsafe_allow_html=True)
+    # ── Section: Charts ──────────────────────────────────────────────────────────────
+    quick_range = "הכל"
 
-    t1, t2, t3 = st.tabs([f"חדשות ({len(new_df)})", f"הוסרו ({len(rem_df)})", f"שינויי מחיר ({len(price_df)})"])
-    with t1: chg_table(new_df)
-    with t2: chg_table(rem_df)
-    with t3: chg_table(price_df, "delta")
+    chart_nb   = sel_nb
+    chart_type = sel_type
 
-# ── Section: Duplicates panel ────────────────────────────────────────────────────
-if len(fdf_dups):
-    with st.expander(f"🔁 כפילויות שזוהו והוסרו ({len(fdf_dups)} מודעות) — לחצי לפתיחה", expanded=False):
-        st.markdown(
-            f'<div class="filter-hint" style="margin-bottom:10px">'
-            f'יד2 מקדם מודעות תשלום (booster/platinum) ומציג אותן במספר עמודי חיפוש. '
-            f'הסקרייפר רושם כל הופעה כשורה נפרדת — אז אותה דירה נספרת מספר פעמים. '
-            f'מתוך <b>{len(fdf_raw):,}</b> שורות סוננו <b>{len(fdf_dups):,}</b> כפילויות, '
-            f'נשארו <b>{len(fdf):,}</b> מודעות ייחודיות.</div>',
-            unsafe_allow_html=True
-        )
-        dup_tbl = fdf_dups[["price_num", "street", "neighborhood", "size_sqm", "url"]].copy()
-        dup_tbl.columns = ["מחיר (₪)", "רחוב", "שכונה", "שטח (מ״ר)", "קישור"]
-        st.dataframe(
-            dup_tbl, use_container_width=True, hide_index=True,
-            height=min(400, 40 + len(dup_tbl) * 36),
-            column_config={"קישור": st.column_config.LinkColumn("קישור", display_text="פתח")},
-        )
-
-# ── Section: Full Table with Excel-style multi-select filters ────────────────────
-st.markdown('<div class="section-title" style="margin-top:18px">כל המודעות</div>', unsafe_allow_html=True)
-
-# fdf is already deduped by listing ID (see top of file)
-tbl_df = fdf[[
-    "price_num", "street", "neighborhood", "apt_type", "rooms", "floor", "size_sqm",
-    "תאריך_הופעה", "מעקב_ראשון", "ימים_בשוק", "url"
-]].copy()
-tbl_df.columns = [
-    "מחיר (₪)", "רחוב", "שכונה", "סוג", "חדרים", "קומה", "שטח (מ״ר)",
-    "תאריך יד2", "מעקב ראשון", "ימים בשוק", "קישור"
-]
-for c in ["חדרים", "קומה", "שטח (מ״ר)", "ימים בשוק"]:
-    tbl_df[c] = pd.to_numeric(tbl_df[c], errors="coerce")
-
-# Filtering is handled by the top filter bar + AgGrid's per-column filter (▼ on header)
-st.markdown(f'<div class="section-desc">{len(tbl_df):,} מודעות &nbsp;·&nbsp; לחצי על ▼ בכותרת כל עמודה לסינון</div>', unsafe_allow_html=True)
-
-# Configure AgGrid — Excel-style: filter ▼ button on each column header
-gb = GridOptionsBuilder.from_dataframe(tbl_df)
-gb.configure_default_column(
-    filter=True,
-    sortable=True,
-    resizable=True,
-    floatingFilter=False,
-    suppressMenu=False,
-    menuTabs=["filterMenuTab"],
-    minWidth=90,
-    flex=1,
-)
-# Per-column minimum widths so nothing gets cut off
-col_widths = {
-    "מחיר (₪)":     {"minWidth": 130, "flex": 1.1},
-    "רחוב":         {"minWidth": 150, "flex": 1.3},
-    "שכונה":        {"minWidth": 160, "flex": 1.3},
-    "סוג":          {"minWidth": 130, "flex": 1.1},
-    "חדרים":        {"minWidth":  80, "flex": 0.6},
-    "קומה":         {"minWidth":  80, "flex": 0.6},
-    "שטח (מ״ר)":   {"minWidth": 100, "flex": 0.8},
-    "תאריך יד2":   {"minWidth": 120, "flex": 0.9},
-    "מעקב ראשון":  {"minWidth": 120, "flex": 0.9},
-    "ימים בשוק":   {"minWidth": 110, "flex": 0.8},
-}
-for col, opts in col_widths.items():
-    gb.configure_column(col, **opts)
-
-# Numeric columns → range/comparison filter
-for col in ["מחיר (₪)", "שטח (מ״ר)", "חדרים", "קומה", "ימים בשוק"]:
-    gb.configure_column(col, type=["numericColumn"], filter="agNumberColumnFilter",
-                        menuTabs=["filterMenuTab"], minWidth=col_widths[col]["minWidth"], flex=col_widths[col]["flex"])
-gb.configure_column("מחיר (₪)", valueFormatter="value ? '₪' + value.toLocaleString() : ''",
-                    minWidth=130, flex=1.1)
-# Categorical columns → text contains/equals filter (community AgGrid).
-# Multi-value Excel-style filtering is handled by the multiselect widgets above the table.
-gb.configure_column("שכונה", filter="agTextColumnFilter", menuTabs=["filterMenuTab"], minWidth=160, flex=1.3)
-gb.configure_column("סוג",   filter="agTextColumnFilter", menuTabs=["filterMenuTab"], minWidth=130, flex=1.1)
-# Text columns
-gb.configure_column("רחוב",        filter="agTextColumnFilter", minWidth=150, flex=1.3)
-gb.configure_column("תאריך יד2",  filter="agTextColumnFilter", minWidth=120, flex=0.9)
-gb.configure_column("מעקב ראשון", filter="agTextColumnFilter", minWidth=120, flex=0.9)
-# Link column
-gb.configure_column("קישור",
-    cellRenderer=JsCode("""
-        class UrlRenderer {
-            init(p) {
-                this.gui = document.createElement('a');
-                this.gui.href = p.value || '#';
-                this.gui.target = '_blank';
-                this.gui.innerText = 'פתח';
-                this.gui.style.cssText = 'display:inline-block;padding:5px 12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;border-radius:8px;color:#1d4ed8;font-weight:700;text-decoration:none;font-size:0.78rem;';
-            }
-            getGui() { return this.gui; }
-        }
-    """),
-    filter=False, sortable=False, minWidth=90, maxWidth=110, flex=0,
-)
-gb.configure_grid_options(
-    enableRtl=True,
-    rowHeight=42,
-    headerHeight=46,
-    suppressRowClickSelection=True,
-    domLayout="normal",
-    suppressMenuHide=True,
-    suppressHorizontalScroll=False,
-    enableCellTextSelection=True,
-    ensureDomOrder=True,
-)
-grid_options = gb.build()
-
-AgGrid(
-    tbl_df,
-    gridOptions=grid_options,
-    update_mode=GridUpdateMode.NO_UPDATE,
-    allow_unsafe_jscode=True,
-    enable_enterprise_modules=False,
-    height=620,
-    theme="alpine",
-    fit_columns_on_grid_load=True,
-    custom_css={
-        ".ag-root-wrapper": {
-            "border": "1px solid #e2e8f0 !important",
-            "border-radius": "14px !important",
-            "overflow": "hidden",
-            "box-shadow": "0 1px 3px rgba(15,23,42,0.04) !important",
-        },
-        ".ag-header": {
-            "background": "#f8fafc !important",
-            "border-bottom": "1px solid #e2e8f0 !important",
-        },
-        ".ag-header-cell": {"font-family": "Inter, Heebo, sans-serif !important"},
-        ".ag-header-cell-menu-button": {
-            "opacity": "1 !important",
-            "color": "#94a3b8",
-            "transition": "color 0.15s",
-        },
-        ".ag-header-cell-menu-button:hover": {
-            "color": "#2563eb !important",
-        },
-        ".ag-header-cell-label": {
-            "font-weight": "700 !important",
-            "font-size": "0.95rem !important",
-            "color": "#0f172a !important",
-            "letter-spacing": "0.01em",
-            "white-space": "normal !important",
-            "line-height": "1.15 !important",
-            "text-align": "center !important",
-            "justify-content": "center !important",
-        },
-        ".ag-header-cell-text": {
-            "white-space": "normal !important",
-            "overflow": "visible !important",
-            "text-overflow": "clip !important",
-        },
-        ".ag-row": {
-            "font-size": "0.86rem",
-            "font-family": "Inter, Heebo, sans-serif !important",
-            "color": "#0f172a !important",
-            "border-bottom": "1px solid #f1f5f9 !important",
-        },
-        ".ag-row:hover": {"background": "#f8fafc !important"},
-        ".ag-row-odd": {"background": "#fafbfc !important"},
-        ".ag-cell": {"display": "flex !important", "align-items": "center !important"},
-        ".ag-set-filter-list": {"direction": "rtl"},
-    }
-)
-
-# ── Section: Run Log ─────────────────────────────────────────────────────────────
-st.markdown('<div class="section-title" style="margin-top:18px">יומן ריצות</div>', unsafe_allow_html=True)
-
-if len(run_log) == 0:
-    st.markdown('<div class="info-notice">יומן ריצות יופיע לאחר הריצה הראשונה.</div>', unsafe_allow_html=True)
-else:
-    cols_to_show = ["timestamp", "status", "pages_scraped", "total_listings", "new_listings",
-                    "removed_listings", "price_cuts", "price_rises", "avg_cut_pct",
-                    "avg_price", "avg_price_per_sqm", "absorption_rate", "survival_30d", "avg_dom", "error"]
-    cols_present = [c for c in cols_to_show if c in run_log.columns]
-    display_log  = run_log[cols_present].copy()
-    display_log["run_date"]  = display_log["timestamp"].dt.strftime("%Y-%m-%d")
-    display_log["timestamp"] = display_log["timestamp"].dt.strftime("%d/%m/%Y %H:%M")
-    _heb_log_cols = {
-        "timestamp":         "תאריך ושעה",
-        "status":            "סטטוס",
-        "pages_scraped":     "עמודים שנסרקו",
-        "total_listings":    'סה"כ מודעות',
-        "new_listings":      "מודעות חדשות",
-        "removed_listings":  "מודעות שהוסרו",
-        "price_cuts":        "הורדות מחיר",
-        "price_rises":       "עליות מחיר",
-        "avg_cut_pct":       "% הורדה ממוצעת",
-        "avg_price":         "מחיר ממוצע",
-        "avg_price_per_sqm": 'מחיר ממוצע למ"ר',
-        "absorption_rate":   "קצב ספיגה",
-        "survival_30d":      "שורדות 30 יום",
-        "avg_dom":           "ימים בשוק (ממוצע)",
-        "error":             "שגיאה",
-    }
-    display_log = display_log.rename(columns=_heb_log_cols)
-
-    rl_gb = GridOptionsBuilder.from_dataframe(display_log)
-    rl_gb.configure_default_column(filter=False, sortable=True, resizable=True,
-                                   minWidth=130, flex=1,
-                                   wrapHeaderText=True, autoHeaderHeight=True)
-    rl_gb.configure_column("run_date", hide=True)
-    rl_gb.configure_selection(selection_mode="single", use_checkbox=False)
-    rl_gb.configure_grid_options(enableRtl=True, rowHeight=36, headerHeight=64,
-                                 suppressMenuHide=True, rowSelection="single")
-    rl_grid_options = rl_gb.build()
-
-    rl_resp = AgGrid(
-        display_log,
-        gridOptions=rl_grid_options,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        allow_unsafe_jscode=True,
-        enable_enterprise_modules=False,
-        height=min(420, 60 + len(display_log) * 36),
-        theme="alpine",
-        fit_columns_on_grid_load=True,
-    )
-
-    # ── New / Removed listings for selected run ──────────────────────────────
-    sel = rl_resp.get("selected_rows")
-    sel_date = None
-    if isinstance(sel, pd.DataFrame) and not sel.empty:
-        sel_date = str(sel.iloc[0].get("run_date", "")) or None
-    elif isinstance(sel, list) and len(sel) > 0:
-        sel_date = sel[0].get("run_date") or None
-
-    if not sel_date:
-        st.markdown('<div class="info-notice">בחר/י שורה ביומן כדי לראות אילו מודעות חדשות ואילו הוסרו באותו יום.</div>',
-                    unsafe_allow_html=True)
+    if len(history) == 0:
+        st.markdown('<div class="info-notice">גרפים יופיעו לאחר מספר ריצות של ה-Scraper.</div>', unsafe_allow_html=True)
     else:
-        first_seen_map = load_first_seen_map()
-        dom_log_df     = load_dom_log()
+        # Apply time-range filter to all history sources
+        def _within_range(df_in, days):
+            if df_in is None or len(df_in) == 0 or days is None:
+                return df_in
+            cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+            return df_in[df_in["date"] >= cutoff]
 
-        def _nb_from_info(info):
-            parts = str(info).split(",")
-            return parts[1].strip() if len(parts) > 1 else ""
-        def _type_from_info(info):
-            parts = str(info).split(",")
-            return parts[0].strip() if parts else ""
+        range_days = {"30 ימים": 30, "7 ימים": 7}.get(quick_range)
+        history_f = _within_range(history,   range_days)
+        nb_hist_f = _within_range(nb_hist,   range_days)
+        type_hist_f = _within_range(type_hist, range_days)
+        rooms_hist_f = _within_range(rooms_hist, range_days)
+        # Neighborhood/type history is now split by room bucket — keep only the
+        # selected room count so those charts honor the 4/5 toggle (no mixed line).
+        if len(nb_hist_f) and "rooms" in nb_hist_f.columns:
+            nb_hist_f = nb_hist_f[nb_hist_f["rooms"] == sel_rooms]
+        if len(type_hist_f) and "rooms" in type_hist_f.columns:
+            type_hist_f = type_hist_f[type_hist_f["rooms"] == sel_rooms]
 
-        # Build a URL → details map (active listings + historical removed listings)
-        details = {}
-        for _, r in df.iterrows():
-            u = r.get("url") or ""
-            if u:
-                details[u] = {
-                    "price":        r.get("price", ""),
-                    "neighborhood": r.get("neighborhood", "") or _nb_from_info(r.get("info", "")),
-                    "size_sqm":     r.get("size_sqm", ""),
-                    "apt_type":     r.get("apt_type", "") or _type_from_info(r.get("info", "")),
-                    "rooms":        r.get("rooms", ""),
-                    "floor":        r.get("floor", ""),
-                }
-        if not dom_log_df.empty:
-            for _, r in dom_log_df.iterrows():
+        using_nb   = chart_nb   != "הכל" and len(nb_hist_f)   > 0
+        using_type = chart_type != "הכל" and len(type_hist_f) > 0
+        rooms_src  = (rooms_hist_f[rooms_hist_f["rooms"] == sel_rooms].sort_values("date")
+                      if len(rooms_hist_f) else rooms_hist_f)
+        using_rooms = len(rooms_src) > 0
+
+        if using_nb and using_type:
+            # Both filters active: type drives both qty and price
+            # (no per-(nb × type) history file is tracked, so we pick one — type is what most users compare)
+            src = type_hist_f[type_hist_f["apt_type"] == chart_type].sort_values("date")
+            qty_x,   qty_y   = src["date"], src["count"]
+            price_x, price_y = src["date"], src["avg_price_per_sqm"]
+            scope_label = f"{chart_nb} · {chart_type}"
+        elif using_nb:
+            src = nb_hist_f[nb_hist_f["neighborhood"] == chart_nb].sort_values("date")
+            qty_x, qty_y     = src["date"], src["count"]
+            price_x, price_y = src["date"], src["avg_price_per_sqm"]
+            scope_label = chart_nb
+        elif using_type:
+            src = type_hist_f[type_hist_f["apt_type"] == chart_type].sort_values("date")
+            qty_x, qty_y     = src["date"], src["count"]
+            price_x, price_y = src["date"], src["avg_price_per_sqm"]
+            scope_label = chart_type
+        elif using_rooms:
+            # Default view: the selected room-count's own trend line.
+            qty_x, qty_y     = rooms_src["date"], rooms_src["count"]
+            price_x, price_y = rooms_src["date"], rooms_src["avg_price_per_sqm"]
+            scope_label = f"{sel_rooms} חדרים"
+        else:
+            qty_x, qty_y     = history["date"], history["כמות"]
+            price_x, price_y = history["date"], history["avg_price_per_sqm"]
+            scope_label = f"{sel_rooms} חדרים"
+
+        # Narrowing filters that the pre-aggregated history files can't slice by.
+        # (sel_rooms is NOT here — it has its own per-room-count history.)
+        any_narrow_filter = (
+            sel_floor != "הכל" or
+            price_range != (price_min, price_max) or
+            size_range != (size_min, size_max)
+        )
+
+        active_filters = [f for f in [chart_nb if using_nb else "", chart_type if using_type else "", quick_range if quick_range != "הכל" else ""] if f]
+        if active_filters:
+            st.markdown(f'<div class="filter-hint">מסונן לפי: <b>{" · ".join(active_filters)}</b></div>', unsafe_allow_html=True)
+
+        gc1, gc2 = st.columns(2, gap="medium")
+
+        # ── Chart 1: Listing quantity over time ──────────────────────────────────────
+        with gc1:
+            qty_label = scope_label if not any_narrow_filter else f"{scope_label} · פילוח חי"
+            st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות 4-5 חדרים פעילות היו בכל יום. עלייה = יותר היצע, ירידה = פחות היצע (יותר נסגרו ממה שנפתחו).">ⓘ</span>כמות מודעות לאורך זמן</div><div class="card-desc">{qty_label}</div>', unsafe_allow_html=True)
+            if any_narrow_filter:
+                # Pre-aggregated history can't be sliced by price/size/rooms/floor — show today's filtered count only
+                st.markdown(
+                    f'<p style="color:#0f172a;font-size:2rem;font-weight:800;padding:18px 0 4px;">{len(fdf):,} מודעות</p>'
+                    f'<p style="color:#475569;font-size:0.84rem;">תואמות את הפילטרים · היסטוריה לפי מחיר/גודל/חדרים/קומה אינה נשמרת</p>',
+                    unsafe_allow_html=True)
+            else:
+                qty_color = CYAN
+                fig_qty = go.Figure()
+                _qx, _qy = _daily(qty_x, qty_y)
+                fig_qty.add_trace(go.Scatter(
+                    x=_qx, y=_qy,
+                    mode="lines+markers+text",
+                    line=dict(color=qty_color, width=2.8, shape="spline", smoothing=0.3),
+                    marker=dict(size=7, color=qty_color, line=dict(color="#ffffff", width=2)),
+                    text=_sparse_labels(_qy, lambda v: f"{int(v):,}"),
+                    textposition="top center",
+                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>%{y} מודעות<extra></extra>"
+                ))
+                _chart(fig_qty, 280)
+                qty_rng = _yrange(_qy)
+                fig_qty.update_layout(yaxis_title="מודעות",
+                                      xaxis=dict(type="category", fixedrange=True,
+                                                 categoryorder="array", categoryarray=list(_qx)),
+                                      yaxis=dict(range=qty_rng, fixedrange=True,
+                                                 gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
+                st.plotly_chart(fig_qty, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Chart 2: Avg price per sqm over time ─────────────────────────────────────
+        with gc2:
+            st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="מחיר ממוצע לכל מ״ר על פני כל המודעות הפעילות. זה האינדיקטור הכי טוב למחיר נטו של השוק (מנטרל הבדלי גודל).">ⓘ</span>מחיר ממוצע למ״ר לאורך זמן</div><div class="card-desc">{scope_label} — עולה/יורד = התייקרות/הוזלה</div>', unsafe_allow_html=True)
+            # Brand blue line; the up/down trend is already carried by the KPI delta
+            # pill and the card description, so the line stays on-brand rather than
+            # flashing red whenever prices tick up.
+            p_color, fill_col = CYAN, "rgba(37,99,235,0.07)"
+            fig_price = go.Figure()
+            _px, _py = _daily(price_x, price_y, agg="mean")
+            fig_price.add_trace(go.Scatter(
+                x=_px, y=_py,
+                mode="lines+markers+text",
+                line=dict(color=p_color, width=2.8, shape="spline", smoothing=0.3),
+                marker=dict(size=7, color=p_color, line=dict(color="#ffffff", width=2)),
+                text=_sparse_labels(_py, lambda v: f"₪{int(v):,}"),
+                textposition="top center",
+                textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                cliponaxis=False,
+                hovertemplate="<b>%{x}</b><br>₪%{y:,.0f}/מ״ר<extra></extra>"
+            ))
+            _chart(fig_price, 280)
+            p_rng = _yrange(_py)
+            fig_price.update_layout(yaxis_title="₪/מ״ר",
+                                    xaxis=dict(type="category", fixedrange=True,
+                                               categoryorder="array", categoryarray=list(_px)),
+                                    yaxis=dict(range=p_rng, tickformat=",d", fixedrange=True,
+                                               gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
+            st.plotly_chart(fig_price, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Chart 5: Avg days on market over time ────────────────────────────────
+        st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
+        gc5, gc6 = st.columns(2, gap="medium")
+        with gc5:
+            st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="DOM = Days On Market. כמה ימים בממוצע מודעה כבר באוויר. עלייה = מודעות נתקעות (השוק מאט), ירידה = מתחלפות מהר (השוק חם).">ⓘ</span>ממוצע ימים בשוק לאורך זמן</div><div class="card-desc">DOM ממוצע של כל המודעות הפעילות · {scope_label}</div>', unsafe_allow_html=True)
+
+            # ONLY use avg_active_dom (avg DOM of currently active listings).
+            # Skip the old avg_dom column entirely — it's a different metric (DOM of removed only).
+            # Source priority: per-neighborhood → per-type → market-wide. Hide the line entirely
+            # if a narrow filter (price/size/rooms/floor) is active, since none of the histories slice by those.
+            xs, ys = [], []
+            dom_src = None
+            if not any_narrow_filter:
+                if sel_nb != "הכל" and "avg_active_dom" in nb_hist_f.columns:
+                    dom_src = nb_hist_f[nb_hist_f["neighborhood"] == sel_nb]
+                elif sel_type != "הכל" and "avg_active_dom" in type_hist_f.columns:
+                    dom_src = type_hist_f[type_hist_f["apt_type"] == sel_type]
+                elif sel_nb == "הכל" and sel_type == "הכל" and len(rooms_src) and "avg_active_dom" in rooms_src.columns:
+                    dom_src = rooms_src
+            if dom_src is not None and len(dom_src):
+                hd = dom_src.dropna(subset=["avg_active_dom"]).copy()
+                hd["avg_active_dom"] = pd.to_numeric(hd["avg_active_dom"], errors="coerce")
+                hd = hd[hd["avg_active_dom"] > 0]
+                if len(hd):
+                    _ddx, _ddy = _daily(hd["date"], hd["avg_active_dom"], agg="mean")
+                    xs, ys = list(_ddx), list(_ddy)
+
+            # Live point reflects the active filters via fdf
+            live_dom = fdf["ימים_בשוק"].dropna()
+            live_dom = live_dom[live_dom >= 0]
+            live_avg = float(live_dom.mean()) if len(live_dom) else None
+
+            today_str = datetime.now().strftime("%d/%m/%y")
+            if live_avg is not None and (not xs or xs[-1] != today_str):
+                xs.append(today_str); ys.append(round(live_avg, 1))
+
+            if len(xs) >= 2:
+                fig_dom = go.Figure(go.Scatter(
+                    x=xs, y=ys,
+                    mode="lines+markers+text",
+                    line=dict(color=CYAN2, width=2.8, shape="spline", smoothing=0.3),
+                    marker=dict(size=7, color=CYAN2, line=dict(color="#ffffff", width=2)),
+                    text=_sparse_labels(ys, lambda v: f"{v:.0f}"),
+                    textposition="top center",
+                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>%{y:.1f} ימים<extra></extra>"
+                ))
+                _chart(fig_dom, 300)
+                dom_rng = _yrange(ys)
+                fig_dom.update_layout(yaxis_title="ימים",
+                                      xaxis=dict(type="category", fixedrange=True,
+                                                 categoryorder="array", categoryarray=list(xs)),
+                                      yaxis=dict(range=dom_rng, fixedrange=True,
+                                                 gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
+                st.plotly_chart(fig_dom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
+            elif len(xs) == 1:
+                st.markdown(f'<p style="color:#0f172a;font-size:1.4rem;font-weight:800;padding:16px 0 4px;">{ys[0]:.1f} ימים בממוצע</p><p style="color:#475569;font-size:0.84rem;">המגמה תיווצר עם ריצות נוספות של ה-Scraper</p>', unsafe_allow_html=True)
+            else:
+                st.markdown('<p style="color:#475569;padding:24px 0;">זמין לאחר ריצת ה-Scraper.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with gc6:
+            # Avg DOM per neighborhood (mean days on market by area)
+            st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="ממוצע ימים בשוק לכל שכונה. עמודה גוהה = השכונה איטית למכור, נמוכה = מודעות מתחלפות מהר.">ⓘ</span>ממוצע ימים בשוק לפי שכונה</div><div class="card-desc">DOM ממוצע פר שכונה (מסונן)</div>', unsafe_allow_html=True)
+            nb_dom = (fdf[fdf["ימים_בשוק"] >= 0]
+                        .groupby("neighborhood")
+                        .agg(avg_dom=("ימים_בשוק", "mean"),
+                             n=("ימים_בשוק", "size"))
+                        .reset_index())
+            nb_dom = nb_dom[(nb_dom["neighborhood"] != "") & (nb_dom["n"] >= 2)]
+            nb_dom = nb_dom.sort_values("avg_dom", ascending=True)
+            if len(nb_dom):
+                # Solid brand blue — the bar length and the sort order already encode
+                # days-on-market, so colour stays a single on-brand hue instead of a
+                # red/amber/green traffic-light.
+                fig_nbdom = go.Figure(go.Bar(
+                    x=nb_dom["avg_dom"].round(1),
+                    y=nb_dom["neighborhood"],
+                    orientation="h",
+                    marker=dict(color=CYAN, line=dict(width=0)),
+                    text=[f"{d:.0f} ימים · {int(n)} דירות" for d, n in zip(nb_dom["avg_dom"], nb_dom["n"])],
+                    textposition="inside",
+                    insidetextanchor="middle",
+                    textfont=dict(size=12, color="white", family="Heebo, Inter, sans-serif"),
+                    customdata=nb_dom["n"],
+                    hovertemplate="<b>%{y}</b><br>%{x:.1f} ימים בממוצע<br>%{customdata} "
+                                  + ("דירות למכירה" if sel_deal == "sale" else "דירות להשכרה")
+                                  + "<extra></extra>",
+                ))
+                _chart(fig_nbdom, max(300, len(nb_dom) * 26))
+                fig_nbdom.update_layout(
+                    xaxis_title="ימים", yaxis_title="",
+                    xaxis=dict(fixedrange=True, gridcolor="#f1f5f9",
+                               tickfont=dict(color="#475569", size=11)),
+                    yaxis=dict(fixedrange=True, gridcolor="rgba(0,0,0,0)",
+                               tickfont=dict(color="#0f172a", size=11), automargin=True),
+                    bargap=0.25,
+                )
+                st.plotly_chart(fig_nbdom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
+            else:
+                st.markdown('<p style="color:#475569;padding:24px 0;">אין מספיק נתונים לפילוח לפי שכונה.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── New / Removed listings per DAY (deduped by listing ID) ─────────────
+        # Uses first_seen.json + dom_log.csv (canonical sources, not run_log which double-counts)
+        st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
+        gc7, gc8 = st.columns(2, gap="medium")
+
+        def _lid(u):
+            return (u or "").split("?")[0].rstrip("/").split("/")[-1]
+
+        fs_map = load_first_seen_map(sel_deal)
+        # Aggregate first_seen by listing-ID → earliest date per ID, then count by date.
+        # After the listing-ID migration, fs_map keys are already listing-IDs but we
+        # still apply _lid() defensively (no-op) so the legacy URL-keyed format also
+        # works if someone restores an old backup.
+        by_lid = {}
+        for k, dt in fs_map.items():
+            lid = _lid(k)
+            if not lid or not dt: continue
+            if lid not in by_lid or dt < by_lid[lid]:
+                by_lid[lid] = dt
+        new_by_date = pd.Series(list(by_lid.values())).value_counts().sort_index() if by_lid else pd.Series(dtype=int)
+        # Hide the baseline scrape date — every listing alive at first scrape gets
+        # marked first_seen=that-date, which is not "new listings" in the sales sense.
+        # Use the earliest date in run_log as the baseline, and drop it from the chart.
+        if len(run_log) > 0 and len(new_by_date) > 1:
+            baseline_date = pd.to_datetime(run_log["timestamp"]).min().strftime("%Y-%m-%d")
+            if baseline_date in new_by_date.index:
+                new_by_date = new_by_date.drop(baseline_date)
+
+        dom_df_full = load_dom_log(sel_deal)
+        if not dom_df_full.empty and "removed_date" in dom_df_full.columns:
+            dom_dedup = dom_df_full.copy()
+            dom_dedup["_lid"] = dom_dedup["url"].apply(_lid)
+            # one removal event per unique listing per date
+            dom_dedup = dom_dedup[dom_dedup["_lid"] != ""].drop_duplicates(subset=["_lid", "removed_date"])
+            # Drop listings that are currently active — those "removals" are
+            # legacy URL-keyed false positives (yad2 randomized URL query strings,
+            # so the same listing kept getting flagged as removed and re-added).
+            active_ids = {_lid(u) for u in df["url"] if u}
+            dom_dedup = dom_dedup[~dom_dedup["_lid"].isin(active_ids)]
+            # For listings that were really removed (don't exist now), keep only the
+            # LATEST removal date — earlier ones are URL-form changes, not real exits.
+            dom_dedup = dom_dedup.sort_values("removed_date").drop_duplicates(subset=["_lid"], keep="last")
+            rem_by_date = dom_dedup.groupby("removed_date").size().sort_index()
+        else:
+            rem_by_date = pd.Series(dtype=int)
+
+        with gc7:
+            st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות נראו לראשונה ביום נתון. מקור: yad2_first_seen.json. ספירה לפי מזהה מודעה (לא URL מלא), כך שכפילויות booster לא נספרות. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות חדשות שנוספו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
+            if len(new_by_date):
+                fig_new = go.Figure(go.Bar(
+                    x=new_by_date.index, y=new_by_date.values,
+                    marker=dict(color=GREEN, line=dict(width=0)),
+                    text=[f"+{int(v)}" for v in new_by_date.values],
+                    textposition="outside",
+                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>+%{y} מודעות חדשות<extra></extra>",
+                ))
+                _chart(fig_new, 280)
+                fig_new.update_layout(yaxis_title="מודעות", bargap=0.3,
+                                      xaxis=dict(type="category", fixedrange=True,
+                                                 categoryorder="category ascending"))
+                new_event = st.plotly_chart(
+                    fig_new, use_container_width=True,
+                    config=dict(displayModeBar=False, scrollZoom=False),
+                    on_select="rerun", key="chart_new_listings",
+                    selection_mode="points",
+                )
+            else:
+                new_event = None
+                st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני first_seen.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with gc8:
+            _rem_reason = "נמכרו או הוסרו" if sel_deal == "sale" else "הושכרו או הוסרו"
+            st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות הוסרו מהשוק ביום נתון ({_rem_reason}). מקור: yad2_dom_log.csv, מנוקה מכפילויות booster. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות שהוסרו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
+            if len(rem_by_date):
+                fig_rem = go.Figure(go.Bar(
+                    x=rem_by_date.index, y=rem_by_date.values,
+                    marker=dict(color=RED, line=dict(width=0)),
+                    text=[f"-{int(v)}" for v in rem_by_date.values],
+                    textposition="outside",
+                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    cliponaxis=False,
+                    hovertemplate="<b>%{x}</b><br>-%{y} מודעות הוסרו<extra></extra>",
+                ))
+                _chart(fig_rem, 280)
+                fig_rem.update_layout(yaxis_title="מודעות", bargap=0.3,
+                                      xaxis=dict(type="category", fixedrange=True,
+                                                 categoryorder="category ascending"))
+                rem_event = st.plotly_chart(
+                    fig_rem, use_container_width=True,
+                    config=dict(displayModeBar=False, scrollZoom=False),
+                    on_select="rerun", key="chart_removed_listings",
+                    selection_mode="points",
+                )
+            else:
+                rem_event = None
+                st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני dom_log.</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Drill-down: clicking a bar above shows the listings for that day ─────
+        def _click_date(event):
+            try:
+                pts = event.selection.points if event else []
+                return str(pts[0]["x"]) if pts else None
+            except Exception:
+                return None
+
+        new_click_date = _click_date(new_event)
+        rem_click_date = _click_date(rem_event)
+
+        if new_click_date or rem_click_date:
+            st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
+            fs_map = load_first_seen_map(sel_deal)
+            dom_full = load_dom_log(sel_deal)
+
+            # Build details ONLY from the filtered active listings (fdf) so the
+            # drill-down respects the filter bar above. Removed listings come from
+            # dom_log filtered by neighborhood/type/price/size where those columns
+            # exist in dom_log; rooms/floor aren't tracked there so those filters
+            # only apply to active listings.
+            details_by_lid = {}
+            for _, r in fdf.iterrows():
                 u = r.get("url") or ""
-                if u and u not in details:
-                    details[u] = {
-                        "price":        r.get("price", ""),
-                        "neighborhood": r.get("neighborhood", ""),
-                        "size_sqm":     r.get("size_sqm", ""),
-                        "apt_type":     r.get("apt_type", ""),
-                        "rooms":        "",
-                        "floor":        "",
+                if not u: continue
+                li = _lid(u)
+                details_by_lid[li] = {
+                    "מחיר": r.get("price", ""),
+                    "שכונה": r.get("neighborhood", "") or (str(r.get("info","")).split(",")[1].strip()
+                                                           if len(str(r.get("info","")).split(",")) >= 3 else ""),
+                    "סוג": r.get("apt_type", ""),
+                    "חדרים": r.get("rooms", ""),
+                    "קומה": r.get("floor", ""),
+                    'מ"ר': r.get("size_sqm", ""),
+                    "קישור": u,
+                    "סטטוס": "פעיל",
+                }
+            if not dom_full.empty:
+                dom_filtered = dom_full.copy()
+                # Apply the filter-bar selections to dom_log rows where the
+                # corresponding columns exist.
+                if sel_nb != "הכל" and "neighborhood" in dom_filtered.columns:
+                    dom_filtered = dom_filtered[dom_filtered["neighborhood"] == sel_nb]
+                if sel_type != "הכל" and "apt_type" in dom_filtered.columns:
+                    dom_filtered = dom_filtered[dom_filtered["apt_type"] == sel_type]
+                if "price" in dom_filtered.columns:
+                    dom_pn = dom_filtered["price"].astype(str).apply(parse_price_num)
+                    dom_filtered = dom_filtered[dom_pn.between(price_range[0], price_range[1]) | dom_pn.isna()]
+                if "size_sqm" in dom_filtered.columns:
+                    dom_sz = pd.to_numeric(dom_filtered["size_sqm"], errors="coerce").fillna(size_range[0])
+                    dom_filtered = dom_filtered[dom_sz.between(size_range[0], size_range[1])]
+                for _, r in dom_filtered.iterrows():
+                    u = r.get("url") or ""
+                    li = _lid(u)
+                    if not li or li in details_by_lid: continue
+                    details_by_lid[li] = {
+                        "מחיר": r.get("price", ""),
+                        "שכונה": r.get("neighborhood", ""),
+                        "סוג": r.get("apt_type", ""),
+                        "חדרים": "",
+                        "קומה": "",
+                        'מ"ר': r.get("size_sqm", ""),
+                        "קישור": u,
+                        "סטטוס": "הוסר",
                     }
 
-        new_urls_for_date = [u for u, d in first_seen_map.items() if d == sel_date]
-        new_rows = []
-        for u in new_urls_for_date:
-            d = details.get(u, {})
-            new_rows.append({
-                "מחיר":   d.get("price", ""),
-                "שכונה":  d.get("neighborhood", ""),
-                "סוג":    d.get("apt_type", ""),
-                "חדרים":  d.get("rooms", ""),
-                "קומה":   d.get("floor", ""),
-                "מ״ר":    d.get("size_sqm", ""),
-                "קישור":  u,
-            })
-        new_tbl = pd.DataFrame(new_rows)
+            if new_click_date:
+                ids_for_date = [_lid(k) for k, d in fs_map.items() if d == new_click_date]
+                rows = [details_by_lid[li] for li in ids_for_date if li in details_by_lid]
+                st.markdown(f'<div class="section-title">דירות שנוספו ב־{new_click_date} ({len(rows)})</div>',
+                            unsafe_allow_html=True)
+                if rows:
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                else:
+                    st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
 
-        if not dom_log_df.empty:
-            rem_for_date = dom_log_df[dom_log_df["removed_date"] == sel_date].copy()
+            if rem_click_date and not dom_full.empty:
+                # Start from the already-filtered dom rows so the drill-down honors
+                # the filter bar. active_ids_now is global (any current listing
+                # blocks it from being a "real removal") regardless of filters.
+                dom_for_date = dom_filtered.copy()
+                dom_for_date["_lid"] = dom_for_date["url"].astype(str).apply(_lid)
+                dom_for_date = dom_for_date[dom_for_date["_lid"] != ""]
+                dom_for_date = dom_for_date.drop_duplicates(subset=["_lid", "removed_date"])
+                active_ids_now = {_lid(u) for u in df["url"] if u}
+                dom_for_date = dom_for_date[~dom_for_date["_lid"].isin(active_ids_now)]
+                dom_for_date = dom_for_date.sort_values("removed_date").drop_duplicates(subset=["_lid"], keep="last")
+                dom_for_date = dom_for_date[dom_for_date["removed_date"] == rem_click_date]
+                rem_rows = []
+                for _, r in dom_for_date.iterrows():
+                    rem_rows.append({
+                        "מחיר": r.get("price", ""),
+                        "שכונה": r.get("neighborhood", ""),
+                        "סוג": r.get("apt_type", ""),
+                        'מ"ר': r.get("size_sqm", ""),
+                        "ימים בשוק": r.get("dom_days", ""),
+                        "נראה לראשונה": r.get("first_seen", ""),
+                        "קישור": r.get("url", ""),
+                    })
+                st.markdown(f'<div class="section-title">דירות שהוסרו ב־{rem_click_date} ({len(rem_rows)})</div>',
+                            unsafe_allow_html=True)
+                if rem_rows:
+                    st.dataframe(pd.DataFrame(rem_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.markdown('<div class="info-notice">אין נתונים לתאריך הזה.</div>', unsafe_allow_html=True)
+
+elif page == "activity":
+    # ── Section: Changes ─────────────────────────────────────────────────────────────
+    st.markdown('<div class="section-title" style="margin-top:18px">מה השתנה מאז העדכון הקודם</div>', unsafe_allow_html=True)
+
+    if chg[0] is None:
+        st.markdown('<div class="info-notice">נדרשות לפחות 2 ריצות לזיהוי שינויים.</div>', unsafe_allow_html=True)
+    else:
+        # Apply the active filter bar to the change tables/tiles so this section honors filters too
+        def _apply_filters(d):
+            if d is None or len(d) == 0:
+                return d
+            d = d.copy()
+            if "price" in d.columns:
+                d["_pn"] = d["price"].apply(parse_price_num)
+            else:
+                d["_pn"] = None
+            d["_sz"] = pd.to_numeric(d.get("size_sqm"), errors="coerce")
+            d["_rm"] = pd.to_numeric(d.get("rooms"),    errors="coerce")
+            d["_fl"] = pd.to_numeric(d.get("floor"),    errors="coerce")
+            d["_nb"] = d.get("info", "").apply(lambda x: (str(x).split(",")[1].strip() if len(str(x).split(",")) > 1 else "")) if "info" in d.columns else ""
+            d["_tp"] = d.get("info", "").apply(lambda x: (str(x).split(",")[0].strip() if str(x) else ""))           if "info" in d.columns else ""
+            m = pd.Series(True, index=d.index)
+            if d["_pn"].notna().any():
+                m &= d["_pn"].between(price_range[0], price_range[1]) | d["_pn"].isna()
+            m &= d["_sz"].fillna(size_range[0]).between(size_range[0], size_range[1])
+            if sel_type  != "הכל" and "_tp" in d.columns: m &= d["_tp"] == sel_type
+            if sel_nb    != "הכל" and "_nb" in d.columns: m &= d["_nb"] == sel_nb
+            if sel_rooms == "5": m &= d["_rm"] >= 5
+            else:                m &= (d["_rm"] >= 4) & (d["_rm"] < 5)
+            if sel_floor != "הכל": m &= d["_fl"] == int(sel_floor)
+            return d[m].drop(columns=["_pn","_sz","_rm","_fl","_nb","_tp"], errors="ignore")
+
+        new_df   = _apply_filters(new_df)
+        rem_df   = _apply_filters(rem_df)
+        price_df = _apply_filters(price_df)
+
+        cuts_n  = len(price_df[price_df["delta"] < 0]) if len(price_df) else 0
+        rises_n = len(price_df[price_df["delta"] > 0]) if len(price_df) else 0
+
+        # Count "uniquely new" — listings whose first_seen date matches the current run date
+        fs_path = deal_path("yad2_first_seen.json", sel_deal)
+        try:
+            with open(fs_path, encoding="utf-8") as _f:
+                _first_seen = json.load(_f)
+        except Exception:
+            _first_seen = {}
+        curr_date = datetime.fromtimestamp(os.path.getmtime(data_file_path)).strftime("%Y-%m-%d")
+        if len(new_df) > 0:
+            unique_new = sum(1 for u in new_df.get("url", []) if _first_seen.get(u or "", "") == curr_date)
         else:
-            rem_for_date = pd.DataFrame()
-        rem_rows = []
-        for _, r in rem_for_date.iterrows():
-            rem_rows.append({
-                "מחיר":         r.get("price", ""),
-                "שכונה":        r.get("neighborhood", ""),
-                "סוג":          r.get("apt_type", ""),
-                "מ״ר":          r.get("size_sqm", ""),
-                "ימים בשוק":    r.get("dom_days", ""),
-                "מעקב ראשון":   r.get("first_seen", ""),
-                "קישור":        r.get("url", ""),
-            })
-        rem_tbl = pd.DataFrame(rem_rows)
+            unique_new = 0
+        total_ever = len(_first_seen)
 
-        st.markdown(
-            f'<div class="info-notice">מציג מודעות חדשות והוסרו לתאריך <b>{sel_date}</b> '
-            f'(נתונים ברזולוציית יום — אם היו מספר ריצות באותו יום, הרשימה משותפת).</div>',
-            unsafe_allow_html=True
+        st.markdown(f"""
+        <div class="delta-row">
+            <div class="delta-tile"><div class="d-label">מודעות חדשות</div><div class="d-value green">+{len(new_df)}</div><div class="d-sub">מתוכן <b>{unique_new}</b> חדשות לחלוטין · מאז {prev_time}</div></div>
+            <div class="delta-tile"><div class="d-label">{"הוסרו / נמכרו" if sel_deal == "sale" else "הוסרו / הושכרו"}</div><div class="d-value red">-{len(rem_df)}</div><div class="d-sub">יצאו מהשוק</div></div>
+            <div class="delta-tile"><div class="d-label">הורדות מחיר</div><div class="d-value green">{cuts_n}</div><div class="d-sub">מחיר הופחת</div></div>
+            <div class="delta-tile"><div class="d-label">עליות מחיר</div><div class="d-value red">{rises_n}</div><div class="d-sub">מחיר עלה</div></div>
+        </div>
+        <div class="filter-hint" style="margin-bottom:18px">סך-כל המודעות הייחודיות שראינו אי-פעם: <b>{total_ever:,}</b></div>
+        """, unsafe_allow_html=True)
+
+        def chg_table(data, mode="normal"):
+            if data is None or len(data) == 0:
+                st.markdown('<p style="color:#aeaeb2;font-size:0.84rem;padding:8px 0;">אין נתונים.</p>', unsafe_allow_html=True)
+                return
+            rows = ""
+            for _, r in data.iterrows():
+                url  = r.get("url", "#") or "#"
+                pr   = r.get("price", "—")
+                st_v = r.get("street", "—") or "—"
+                nb   = r.get("neighborhood", "—") or "—"
+                sz   = f"{int(r['size_sqm'])} m²" if pd.notna(r.get("size_sqm")) else "—"
+                lnk  = f'<a class="open-btn" href="{url}" target="_blank">פתח</a>'
+                if mode == "delta":
+                    d = r["delta"]; pct = r["delta_pct"]; pp = r.get("prev_price", "—")
+                    cls = "down" if d < 0 else "up"
+                    arrow = "▼" if d < 0 else "▲"
+                    ds = f'<span class="{cls}">{arrow} ₪{abs(int(d)):,} ({abs(pct)}%)</span>'
+                    rows += f"<tr><td class='muted'>{pp}</td><td>{pr}</td><td>{ds}</td><td>{st_v}</td><td>{nb}</td><td class='muted'>{sz}</td><td>{lnk}</td></tr>"
+                else:
+                    rows += f"<tr><td>{pr}</td><td>{st_v}</td><td>{nb}</td><td class='muted'>{sz}</td><td>{lnk}</td></tr>"
+            hdr = ("<tr><th>מחיר קודם</th><th>מחיר חדש</th><th>שינוי</th><th>רחוב</th><th>שכונה</th><th>שטח</th><th></th></tr>"
+                   if mode == "delta" else
+                   "<tr><th>מחיר</th><th>רחוב</th><th>שכונה</th><th>שטח</th><th></th></tr>")
+            st.markdown(f'<div style="overflow-x:auto"><table class="chg-tbl"><thead>{hdr}</thead><tbody>{rows}</tbody></table></div>',
+                        unsafe_allow_html=True)
+
+        t1, t2, t3 = st.tabs([f"חדשות ({len(new_df)})", f"הוסרו ({len(rem_df)})", f"שינויי מחיר ({len(price_df)})"])
+        with t1: chg_table(new_df)
+        with t2: chg_table(rem_df)
+        with t3: chg_table(price_df, "delta")
+
+    # ── Section: Duplicates panel ────────────────────────────────────────────────────
+    if len(fdf_dups):
+        with st.expander(f"🔁 כפילויות שזוהו והוסרו ({len(fdf_dups)} מודעות) — לחצי לפתיחה", expanded=False):
+            st.markdown(
+                f'<div class="filter-hint" style="margin-bottom:10px">'
+                f'יד2 מקדם מודעות תשלום (booster/platinum) ומציג אותן במספר עמודי חיפוש. '
+                f'הסקרייפר רושם כל הופעה כשורה נפרדת — אז אותה דירה נספרת מספר פעמים. '
+                f'מתוך <b>{len(fdf_raw):,}</b> שורות סוננו <b>{len(fdf_dups):,}</b> כפילויות, '
+                f'נשארו <b>{len(fdf):,}</b> מודעות ייחודיות.</div>',
+                unsafe_allow_html=True
+            )
+            dup_tbl = fdf_dups[["price_num", "street", "neighborhood", "size_sqm", "url"]].copy()
+            dup_tbl.columns = ["מחיר (₪)", "רחוב", "שכונה", "שטח (מ״ר)", "קישור"]
+            st.dataframe(
+                dup_tbl, use_container_width=True, hide_index=True,
+                height=min(400, 40 + len(dup_tbl) * 36),
+                column_config={"קישור": st.column_config.LinkColumn("קישור", display_text="פתח")},
+            )
+
+    # ── Section: Run Log ─────────────────────────────────────────────────────────────
+    st.markdown('<div class="section-title" style="margin-top:18px">יומן ריצות</div>', unsafe_allow_html=True)
+
+    if len(run_log) == 0:
+        st.markdown('<div class="info-notice">יומן ריצות יופיע לאחר הריצה הראשונה.</div>', unsafe_allow_html=True)
+    else:
+        cols_to_show = ["timestamp", "status", "pages_scraped", "total_listings", "new_listings",
+                        "removed_listings", "price_cuts", "price_rises", "avg_cut_pct",
+                        "avg_price", "avg_price_per_sqm", "absorption_rate", "survival_30d", "avg_dom", "error"]
+        cols_present = [c for c in cols_to_show if c in run_log.columns]
+        display_log  = run_log[cols_present].copy()
+        display_log["run_date"]  = display_log["timestamp"].dt.strftime("%Y-%m-%d")
+        display_log["timestamp"] = display_log["timestamp"].dt.strftime("%d/%m/%Y %H:%M")
+        _heb_log_cols = {
+            "timestamp":         "תאריך ושעה",
+            "status":            "סטטוס",
+            "pages_scraped":     "עמודים שנסרקו",
+            "total_listings":    'סה"כ מודעות',
+            "new_listings":      "מודעות חדשות",
+            "removed_listings":  "מודעות שהוסרו",
+            "price_cuts":        "הורדות מחיר",
+            "price_rises":       "עליות מחיר",
+            "avg_cut_pct":       "% הורדה ממוצעת",
+            "avg_price":         "מחיר ממוצע",
+            "avg_price_per_sqm": 'מחיר ממוצע למ"ר',
+            "absorption_rate":   "קצב ספיגה",
+            "survival_30d":      "שורדות 30 יום",
+            "avg_dom":           "ימים בשוק (ממוצע)",
+            "error":             "שגיאה",
+        }
+        display_log = display_log.rename(columns=_heb_log_cols)
+
+        rl_gb = GridOptionsBuilder.from_dataframe(display_log)
+        rl_gb.configure_default_column(filter=False, sortable=True, resizable=True,
+                                       minWidth=130, flex=1,
+                                       wrapHeaderText=True, autoHeaderHeight=True)
+        rl_gb.configure_column("run_date", hide=True)
+        rl_gb.configure_selection(selection_mode="single", use_checkbox=False)
+        rl_gb.configure_grid_options(enableRtl=True, rowHeight=36, headerHeight=64,
+                                     suppressMenuHide=True, rowSelection="single")
+        rl_grid_options = rl_gb.build()
+
+        rl_resp = AgGrid(
+            display_log,
+            gridOptions=rl_grid_options,
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
+            allow_unsafe_jscode=True,
+            enable_enterprise_modules=False,
+            height=min(420, 60 + len(display_log) * 36),
+            theme="alpine",
+            fit_columns_on_grid_load=True,
         )
 
-        col_new, col_rem = st.columns(2)
-        with col_new:
-            st.markdown(f'<div class="section-title">🟢 חדשות ({len(new_tbl)})</div>', unsafe_allow_html=True)
-            if new_tbl.empty:
-                st.markdown('<div class="info-notice">אין מודעות חדשות לתאריך זה.</div>', unsafe_allow_html=True)
+        # ── New / Removed listings for selected run ──────────────────────────────
+        sel = rl_resp.get("selected_rows")
+        sel_date = None
+        if isinstance(sel, pd.DataFrame) and not sel.empty:
+            sel_date = str(sel.iloc[0].get("run_date", "")) or None
+        elif isinstance(sel, list) and len(sel) > 0:
+            sel_date = sel[0].get("run_date") or None
+
+        if not sel_date:
+            st.markdown('<div class="info-notice">בחר/י שורה ביומן כדי לראות אילו מודעות חדשות ואילו הוסרו באותו יום.</div>',
+                        unsafe_allow_html=True)
+        else:
+            first_seen_map = load_first_seen_map(sel_deal)
+            dom_log_df     = load_dom_log(sel_deal)
+
+            def _nb_from_info(info):
+                parts = str(info).split(",")
+                return parts[1].strip() if len(parts) > 1 else ""
+            def _type_from_info(info):
+                parts = str(info).split(",")
+                return parts[0].strip() if parts else ""
+
+            # Build a URL → details map (active listings + historical removed listings)
+            details = {}
+            for _, r in df.iterrows():
+                u = r.get("url") or ""
+                if u:
+                    details[u] = {
+                        "price":        r.get("price", ""),
+                        "neighborhood": r.get("neighborhood", "") or _nb_from_info(r.get("info", "")),
+                        "size_sqm":     r.get("size_sqm", ""),
+                        "apt_type":     r.get("apt_type", "") or _type_from_info(r.get("info", "")),
+                        "rooms":        r.get("rooms", ""),
+                        "floor":        r.get("floor", ""),
+                    }
+            if not dom_log_df.empty:
+                for _, r in dom_log_df.iterrows():
+                    u = r.get("url") or ""
+                    if u and u not in details:
+                        details[u] = {
+                            "price":        r.get("price", ""),
+                            "neighborhood": r.get("neighborhood", ""),
+                            "size_sqm":     r.get("size_sqm", ""),
+                            "apt_type":     r.get("apt_type", ""),
+                            "rooms":        "",
+                            "floor":        "",
+                        }
+
+            new_urls_for_date = [u for u, d in first_seen_map.items() if d == sel_date]
+            new_rows = []
+            for u in new_urls_for_date:
+                d = details.get(u, {})
+                new_rows.append({
+                    "מחיר":   d.get("price", ""),
+                    "שכונה":  d.get("neighborhood", ""),
+                    "סוג":    d.get("apt_type", ""),
+                    "חדרים":  d.get("rooms", ""),
+                    "קומה":   d.get("floor", ""),
+                    "מ״ר":    d.get("size_sqm", ""),
+                    "קישור":  u,
+                })
+            new_tbl = pd.DataFrame(new_rows)
+
+            if not dom_log_df.empty:
+                rem_for_date = dom_log_df[dom_log_df["removed_date"] == sel_date].copy()
             else:
-                st.dataframe(new_tbl, use_container_width=True, hide_index=True,
-                             height=min(420, 40 + len(new_tbl) * 32),
-                             column_config={"קישור": st.column_config.LinkColumn("קישור", display_text="פתח")})
-        with col_rem:
-            st.markdown(f'<div class="section-title">🔴 הוסרו ({len(rem_tbl)})</div>', unsafe_allow_html=True)
-            if rem_tbl.empty:
-                st.markdown('<div class="info-notice">אין מודעות שהוסרו לתאריך זה.</div>', unsafe_allow_html=True)
-            else:
-                st.dataframe(rem_tbl, use_container_width=True, hide_index=True,
-                             height=min(420, 40 + len(rem_tbl) * 32),
-                             column_config={"קישור": st.column_config.LinkColumn("קישור", display_text="פתח")})
+                rem_for_date = pd.DataFrame()
+            rem_rows = []
+            for _, r in rem_for_date.iterrows():
+                rem_rows.append({
+                    "מחיר":         r.get("price", ""),
+                    "שכונה":        r.get("neighborhood", ""),
+                    "סוג":          r.get("apt_type", ""),
+                    "מ״ר":          r.get("size_sqm", ""),
+                    "ימים בשוק":    r.get("dom_days", ""),
+                    "מעקב ראשון":   r.get("first_seen", ""),
+                    "קישור":        r.get("url", ""),
+                })
+            rem_tbl = pd.DataFrame(rem_rows)
+
+            st.markdown(
+                f'<div class="info-notice">מציג מודעות חדשות והוסרו לתאריך <b>{sel_date}</b> '
+                f'(נתונים ברזולוציית יום — אם היו מספר ריצות באותו יום, הרשימה משותפת).</div>',
+                unsafe_allow_html=True
+            )
+
+            col_new, col_rem = st.columns(2)
+            with col_new:
+                st.markdown(f'<div class="section-title">🟢 חדשות ({len(new_tbl)})</div>', unsafe_allow_html=True)
+                if new_tbl.empty:
+                    st.markdown('<div class="info-notice">אין מודעות חדשות לתאריך זה.</div>', unsafe_allow_html=True)
+                else:
+                    st.dataframe(new_tbl, use_container_width=True, hide_index=True,
+                                 height=min(420, 40 + len(new_tbl) * 32),
+                                 column_config={"קישור": st.column_config.LinkColumn("קישור", display_text="פתח")})
+            with col_rem:
+                st.markdown(f'<div class="section-title">🔴 הוסרו ({len(rem_tbl)})</div>', unsafe_allow_html=True)
+                if rem_tbl.empty:
+                    st.markdown('<div class="info-notice">אין מודעות שהוסרו לתאריך זה.</div>', unsafe_allow_html=True)
+                else:
+                    st.dataframe(rem_tbl, use_container_width=True, hide_index=True,
+                                 height=min(420, 40 + len(rem_tbl) * 32),
+                                 column_config={"קישור": st.column_config.LinkColumn("קישור", display_text="פתח")})
+
+elif page == "listings":
+    # ── Section: Full Table with Excel-style multi-select filters ────────────────────
+    st.markdown('<div class="section-title" style="margin-top:18px">כל המודעות</div>', unsafe_allow_html=True)
+
+    # fdf is already deduped by listing ID (see top of file)
+    tbl_df = fdf[[
+        "price_num", "street", "neighborhood", "apt_type", "rooms", "floor", "size_sqm",
+        "תאריך_הופעה", "מעקב_ראשון", "ימים_בשוק", "url"
+    ]].copy()
+    tbl_df.columns = [
+        "מחיר (₪)", "רחוב", "שכונה", "סוג", "חדרים", "קומה", "שטח (מ״ר)",
+        "תאריך יד2", "מעקב ראשון", "ימים בשוק", "קישור"
+    ]
+    for c in ["חדרים", "קומה", "שטח (מ״ר)", "ימים בשוק"]:
+        tbl_df[c] = pd.to_numeric(tbl_df[c], errors="coerce")
+
+    # Filtering is handled by the top filter bar + AgGrid's per-column filter (▼ on header)
+    st.markdown(f'<div class="section-desc">{len(tbl_df):,} מודעות &nbsp;·&nbsp; לחצי על ▼ בכותרת כל עמודה לסינון</div>', unsafe_allow_html=True)
+
+    # Configure AgGrid — Excel-style: filter ▼ button on each column header
+    gb = GridOptionsBuilder.from_dataframe(tbl_df)
+    gb.configure_default_column(
+        filter=True,
+        sortable=True,
+        resizable=True,
+        floatingFilter=False,
+        suppressMenu=False,
+        menuTabs=["filterMenuTab"],
+        minWidth=90,
+        flex=1,
+    )
+    # Per-column minimum widths so nothing gets cut off
+    col_widths = {
+        "מחיר (₪)":     {"minWidth": 130, "flex": 1.1},
+        "רחוב":         {"minWidth": 150, "flex": 1.3},
+        "שכונה":        {"minWidth": 160, "flex": 1.3},
+        "סוג":          {"minWidth": 130, "flex": 1.1},
+        "חדרים":        {"minWidth":  80, "flex": 0.6},
+        "קומה":         {"minWidth":  80, "flex": 0.6},
+        "שטח (מ״ר)":   {"minWidth": 100, "flex": 0.8},
+        "תאריך יד2":   {"minWidth": 120, "flex": 0.9},
+        "מעקב ראשון":  {"minWidth": 120, "flex": 0.9},
+        "ימים בשוק":   {"minWidth": 110, "flex": 0.8},
+    }
+    for col, opts in col_widths.items():
+        gb.configure_column(col, **opts)
+
+    # Numeric columns → range/comparison filter
+    for col in ["מחיר (₪)", "שטח (מ״ר)", "חדרים", "קומה", "ימים בשוק"]:
+        gb.configure_column(col, type=["numericColumn"], filter="agNumberColumnFilter",
+                            menuTabs=["filterMenuTab"], minWidth=col_widths[col]["minWidth"], flex=col_widths[col]["flex"])
+    gb.configure_column("מחיר (₪)", valueFormatter="value ? '₪' + value.toLocaleString() : ''",
+                        minWidth=130, flex=1.1)
+    # Categorical columns → text contains/equals filter (community AgGrid).
+    # Multi-value Excel-style filtering is handled by the multiselect widgets above the table.
+    gb.configure_column("שכונה", filter="agTextColumnFilter", menuTabs=["filterMenuTab"], minWidth=160, flex=1.3)
+    gb.configure_column("סוג",   filter="agTextColumnFilter", menuTabs=["filterMenuTab"], minWidth=130, flex=1.1)
+    # Text columns
+    gb.configure_column("רחוב",        filter="agTextColumnFilter", minWidth=150, flex=1.3)
+    gb.configure_column("תאריך יד2",  filter="agTextColumnFilter", minWidth=120, flex=0.9)
+    gb.configure_column("מעקב ראשון", filter="agTextColumnFilter", minWidth=120, flex=0.9)
+    # Link column
+    gb.configure_column("קישור",
+        cellRenderer=JsCode("""
+            class UrlRenderer {
+                init(p) {
+                    this.gui = document.createElement('a');
+                    this.gui.href = p.value || '#';
+                    this.gui.target = '_blank';
+                    this.gui.innerText = 'פתח';
+                    this.gui.style.cssText = 'display:inline-block;padding:5px 12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;border-radius:8px;color:#1d4ed8;font-weight:700;text-decoration:none;font-size:0.78rem;';
+                }
+                getGui() { return this.gui; }
+            }
+        """),
+        filter=False, sortable=False, minWidth=90, maxWidth=110, flex=0,
+    )
+    gb.configure_grid_options(
+        enableRtl=True,
+        rowHeight=42,
+        headerHeight=46,
+        suppressRowClickSelection=True,
+        domLayout="normal",
+        suppressMenuHide=True,
+        suppressHorizontalScroll=False,
+        enableCellTextSelection=True,
+        ensureDomOrder=True,
+    )
+    grid_options = gb.build()
+
+    AgGrid(
+        tbl_df,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.NO_UPDATE,
+        allow_unsafe_jscode=True,
+        enable_enterprise_modules=False,
+        height=620,
+        theme="alpine",
+        fit_columns_on_grid_load=True,
+        custom_css={
+            ".ag-root-wrapper": {
+                "border": "1px solid #e2e8f0 !important",
+                "border-radius": "14px !important",
+                "overflow": "hidden",
+                "box-shadow": "0 1px 3px rgba(15,23,42,0.04) !important",
+            },
+            ".ag-header": {
+                "background": "#f8fafc !important",
+                "border-bottom": "1px solid #e2e8f0 !important",
+            },
+            ".ag-header-cell": {"font-family": "Inter, Heebo, sans-serif !important"},
+            ".ag-header-cell-menu-button": {
+                "opacity": "1 !important",
+                "color": "#94a3b8",
+                "transition": "color 0.15s",
+            },
+            ".ag-header-cell-menu-button:hover": {
+                "color": "#2563eb !important",
+            },
+            ".ag-header-cell-label": {
+                "font-weight": "700 !important",
+                "font-size": "0.95rem !important",
+                "color": "#0f172a !important",
+                "letter-spacing": "0.01em",
+                "white-space": "normal !important",
+                "line-height": "1.15 !important",
+                "text-align": "center !important",
+                "justify-content": "center !important",
+            },
+            ".ag-header-cell-text": {
+                "white-space": "normal !important",
+                "overflow": "visible !important",
+                "text-overflow": "clip !important",
+            },
+            ".ag-row": {
+                "font-size": "0.86rem",
+                "font-family": "Inter, Heebo, sans-serif !important",
+                "color": "#0f172a !important",
+                "border-bottom": "1px solid #f1f5f9 !important",
+            },
+            ".ag-row:hover": {"background": "#f8fafc !important"},
+            ".ag-row-odd": {"background": "#fafbfc !important"},
+            ".ag-cell": {"display": "flex !important", "align-items": "center !important"},
+            ".ag-set-filter-list": {"direction": "rtl"},
+        }
+    )
 
 st.markdown("""
 <div style="text-align:center;padding:28px 0 18px;margin-top:24px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:0.74rem;font-weight:500;">

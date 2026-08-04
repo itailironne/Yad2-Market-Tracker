@@ -1,8 +1,8 @@
 # Yad2 Real Estate Market Tracker — Ra'anana 4–5-Room Apartments
 
-A fully automated system that scrapes, tracks, and visualises the Ra'anana 4- and 5-room apartment market on Yad2. It runs twice daily, detects every new listing, price change, and removal, and presents everything in a live interactive dashboard.
+A fully automated system that scrapes, tracks, and visualises the Ra'anana 4- and 5-room apartment market on Yad2 — both **for-sale** and **rental** listings. It runs twice daily, detects every new listing, price change, and removal, and presents everything in a live interactive dashboard with a sale/rent toggle.
 
-> **Note:** The data files are still named `…_4rooms.*` for historical continuity — they now hold 4- **and** 5-room listings (`rooms=4-5`). Use the dashboard's **חדרים** filter to split them, and expect a step-up in the market-wide history charts on the date 5-room listings were first included.
+> **Note:** The data files are still named `…_4rooms.*` for historical continuity — they now hold 4- **and** 5-room listings (`rooms=4-5`). Use the dashboard's **חדרים** filter to split them, and expect a step-up in the market-wide history charts on the date 5-room listings were first included. Every sale data file also has a rental twin with a `_rent` suffix (e.g. `yad2_history_rent.csv`), following the same convention.
 
 ---
 
@@ -13,17 +13,19 @@ Yad2 Website
      │
      ▼
 yad2_scraper.py  ──────────────────────────────────────────────────────
-│  1. Opens Yad2 feed page (18+ pages) via Playwright browser           │
-│  2. Extracts all listing cards (price, street, rooms, floor, sqm)     │
-│  3. Fetches real posting date for each listing via in-browser fetch   │
-│  4. Detects new listings, removed listings, price changes             │
-│  5. Computes market stats (avg price, absorption, DOM, survival...)   │
-│  6. Saves everything to data files                                    │
+│  1. Warms Radware clearance ONCE (shared — clearance is domain-level, │
+│     not path-specific, so one warm-up covers both legs below)         │
+│  2. SALE leg: opens the for-sale feed (18+ pages) via Playwright,     │
+│     extracts every listing, diffs, computes stats, saves              │
+│  3. RENT leg: same pipeline against the rental feed, entirely         │
+│     separate output files (retried independently of the sale leg)    │
+│  4. Each leg fetches real posting dates, detects new/removed/price    │
+│     changes, computes market stats, and saves atomically              │
 └───────────────────────────────────────────────────────────────────────
      │
      ▼  writes to ──►
 ┌─────────────────────────────────────────────────────────────────────┐
-│  DATA FILES                                                          │
+│  DATA FILES (sale; every file has a `_rent` twin, e.g. _rent.csv)   │
 │  yad2_raanana_4rooms.json / .csv   — current listings snapshot      │
 │  yad2_prev_run.json                — previous run snapshot           │
 │  yad2_first_seen.json              — URL → first-seen date           │
@@ -38,7 +40,7 @@ yad2_scraper.py  ─────────────────────
 yad2_dashboard.py  (Streamlit)
      │
      ▼
-Browser dashboard at http://localhost:8501
+Browser dashboard at http://localhost:8501 — toggle סוג עסקה (מכירה/השכרה)
 ```
 
 ---
@@ -49,7 +51,7 @@ Browser dashboard at http://localhost:8501
 python yad2_scraper.py
 ```
 
-- Takes ~5–10 minutes (18 pages + date fetching for all listings)
+- Takes ~10–15 minutes (sale leg: 18+ pages + date fetching; rent leg: ~8 pages + date fetching — one shared warm-up covers both)
 - Scheduled to run automatically at **08:00** and **20:00** daily
 - Output is printed to console: pages scraped, dates fetched, changes detected
 - **Opens real Chrome windows** for ~1 minute at the start (the anti-bot warm-up,
@@ -95,6 +97,8 @@ Opens at `http://localhost:8501`
 | `yad2_dom_log.csv` | scraper | Every removed listing with its days-on-market |
 | `yad2_run_log.csv` | scraper | Every run: status, counts, errors |
 
+Every row above is the **sale** file. Each one also has a rental twin with a `_rent` suffix inserted before the extension (e.g. `yad2_history_rent.csv`, `yad2_run_log_rent.csv`) — same schema, written by the scraper's rent leg. `yad2_neighborhood_ids.json` is shared (city-level neighbourhood IDs apply to both feeds).
+
 ---
 
 ## Listing Data Fields
@@ -103,7 +107,7 @@ Each record in `yad2_raanana_4rooms.json` (and `.csv`) has:
 
 | Field | Example | Description |
 |-------|---------|-------------|
-| `price` | `₪ 2,900,000` | Asking price as shown on Yad2 |
+| `price` | `₪ 2,900,000` | Asking price as shown on Yad2 (for rental listings, this is the **monthly** rent, e.g. `₪ 8,500`) |
 | `street` | `הגלבוע` | Street name |
 | `info` | `דירה, לב הפארק, רעננה` | Apt type, neighbourhood, city |
 | `rooms` | `4` | Number of rooms |
@@ -248,6 +252,15 @@ exploits this in two phases:
    clearance, so the whole 18-page scrape (plus per-neighborhood sweeps and the
    in-browser date fetches) sails through.
 
+**Sale + rent share one warm-up.** Clearance cookies (`uzmx`, `__uzm*`) are
+scoped to the `yad2.co.il` domain, not to a specific path — so a single
+warm-up (run once, against the sale URL) also clears the rental feed. The
+scraper runs both legs sequentially in one invocation: sale first, then
+rent, each opening its own fresh browser context on the already-warmed
+profile. If a leg hits a bot-block mid-run, only *that* leg re-warms and
+retries (with its own 6-attempt/~2¼-hour backoff budget) — the other leg's
+already-saved results are untouched.
+
 Why it must be this way — each was verified against the live site:
 
 | Constraint | Reason |
@@ -306,7 +319,7 @@ plotly
 
 ## Automation Schedule
 
-The scraper is configured to run automatically at **08:00** and **20:00** every day via Windows Task Scheduler. Each run takes ~5–10 minutes.
+The scraper is configured to run automatically at **08:00** and **20:00** every day via Windows Task Scheduler. Each run takes ~10–15 minutes (sale + rent legs combined).
 
 ### Important Task Scheduler settings
 For each task (Yad2_Morning / Yad2_Evening), under **Properties**:
