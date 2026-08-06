@@ -34,6 +34,7 @@ yad2_scraper.py  ─────────────────────
 │  yad2_neighborhood_history.csv     — neighbourhood price history     │
 │  yad2_dom_log.csv                  — removed listings + DOM          │
 │  yad2_run_log.csv                  — log of every scraper run        │
+│  yad2_listings_archive.csv         — append-only backup, every run   │
 └─────────────────────────────────────────────────────────────────────┘
      │
      ▼  reads from ──►
@@ -96,6 +97,7 @@ Opens at `http://localhost:8501`
 | `yad2_neighborhood_history.csv` | scraper | One row per neighbourhood per run: price trends |
 | `yad2_dom_log.csv` | scraper | Every removed listing with its days-on-market |
 | `yad2_run_log.csv` | scraper | Every run: status, counts, errors |
+| `yad2_listings_archive.csv` | scraper | **Backup.** Every listing from every run, appended (never rewritten) with a `snapshot_time` column — recovers data even if a snapshot file is corrupted or a run misbehaves |
 
 Every row above is the **sale** file. Each one also has a rental twin with a `_rent` suffix inserted before the extension (e.g. `yad2_history_rent.csv`, `yad2_run_log_rent.csv`) — same schema, written by the scraper's rent leg. `yad2_neighborhood_ids.json` is shared (city-level neighbourhood IDs apply to both feeds).
 

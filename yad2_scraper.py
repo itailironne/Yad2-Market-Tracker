@@ -31,6 +31,7 @@ class DealConfig:
     url: str
     json_file: str
     csv_file: str
+    archive_file: str
     history_file: str
     prev_file: str
     display_prev_file: str
@@ -54,6 +55,7 @@ SALE_CFG = DealConfig(
     url=f"https://www.yad2.co.il/realestate/forsale?city={CITY_ID}&{ROOMS_QS}",
     json_file=os.path.join(OUT, "yad2_raanana_4rooms.json"),
     csv_file=os.path.join(OUT, "yad2_raanana_4rooms.csv"),
+    archive_file=os.path.join(OUT, "yad2_listings_archive.csv"),
     history_file=os.path.join(OUT, "yad2_history.csv"),
     prev_file=os.path.join(OUT, "yad2_prev_run.json"),
     display_prev_file=os.path.join(OUT, "yad2_prev_display.json"),
@@ -78,6 +80,7 @@ RENT_CFG = DealConfig(
     url=f"https://www.yad2.co.il/realestate/rent?city={CITY_ID}&{ROOMS_QS}",
     json_file=os.path.join(OUT, _rent_name("yad2_raanana_4rooms.json")),
     csv_file=os.path.join(OUT, _rent_name("yad2_raanana_4rooms.csv")),
+    archive_file=os.path.join(OUT, _rent_name("yad2_listings_archive.csv")),
     history_file=os.path.join(OUT, _rent_name("yad2_history.csv")),
     prev_file=os.path.join(OUT, _rent_name("yad2_prev_run.json")),
     display_prev_file=os.path.join(OUT, _rent_name("yad2_prev_display.json")),
@@ -1103,6 +1106,21 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
         w.writeheader(); w.writerows(listings)
         tmp_csv = tf.name
     os.replace(tmp_csv, cfg.csv_file)
+
+    # ── Append every listing to the permanent, append-only archive ──────────────
+    # cfg.json_file/csv_file are overwritten each run — a bad run (or a bug) can
+    # only ever lose what's IN that one snapshot. This file is never rewritten,
+    # only appended to, so every listing ever seen stays recoverable here even
+    # if something upstream corrupts or empties the live snapshot.
+    archive_cols = ["snapshot_time"] + list(listings[0].keys())
+    archive_exists = os.path.exists(cfg.archive_file)
+    with open(cfg.archive_file, "a", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        if not archive_exists:
+            w.writerow(archive_cols)
+        for r in listings:
+            w.writerow([now] + [r.get(k, "") for k in listings[0].keys()])
+
     # Preserve the previous run's snapshot (copy2 keeps its original mtime, which
     # the dashboard shows as the "since" time) BEFORE overwriting PREV_FILE with
     # this run. Best-effort — never let it fail the scrape.
