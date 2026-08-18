@@ -468,7 +468,15 @@ async def ensure_radware_clearance(p, url, warm_waits=(40, 55, 70)):
     other path — callers don't need to re-warm per deal type."""
     for attempt, wait_s in enumerate(warm_waits, 1):
         warm_clearance(url, wait_s=wait_s)
-        ctx = await _launch_profile_context(p)
+        try:
+            ctx = await _launch_profile_context(p)
+        except Exception as e:
+            # Chrome itself failed to launch (e.g. a contended/stale profile
+            # lock right after a prior crash) — this used to abort the whole
+            # run immediately with no retry. Treat it like "still blocked"
+            # instead: fall through to the next warm attempt.
+            print(f"  Browser launch failed on warm attempt {attempt}/{len(warm_waits)}: {e}")
+            continue
         cleared = False
         try:
             pg = ctx.pages[0] if ctx.pages else await ctx.new_page()
@@ -1219,13 +1227,34 @@ def _load_json_or_default(path, default):
         return default
 
 
+async def ensure_radware_clearance_with_retry(p, url, max_attempts=6,
+                                               retry_delays_s=(300, 600, 1200, 2400, 3600)):
+    """Wrap ensure_radware_clearance with the same retry-and-backoff budget as
+    run_leg_with_retry (~2¼ hours). Previously a single failed warm-up (e.g.
+    the browser itself crashing on launch) aborted the entire invocation with
+    no retry at all — see the 08/08 run_log entries. Re-raises after
+    exhausting every attempt so run_all()'s top-level handler still logs a
+    final failure instead of retrying forever."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await ensure_radware_clearance(p, url)
+            return
+        except Exception as e:
+            print(f"[warmup] Attempt {attempt}/{max_attempts} failed: {e}")
+            if attempt == max_attempts:
+                raise
+            delay = retry_delays_s[min(attempt - 1, len(retry_delays_s) - 1)]
+            print(f"  [warmup] retrying in {delay}s ({delay // 60} min)...")
+            await asyncio.sleep(delay)
+
+
 async def run_all():
     """Combined entry point: scrape sale, then rent, in one invocation,
     sharing a single Radware warm-up (clearance is domain-level, not
     path-specific, so warming once on the sale URL also clears rent)."""
     first_seen = {cfg.key: _load_json_or_default(cfg.first_seen_file, {}) for cfg in DEAL_CONFIGS}
     async with async_playwright() as p:
-        await ensure_radware_clearance(p, url=SALE_CFG.url)
+        await ensure_radware_clearance_with_retry(p, url=SALE_CFG.url)
         for cfg in DEAL_CONFIGS:
             await run_leg_with_retry(p, cfg, first_seen[cfg.key])
 
