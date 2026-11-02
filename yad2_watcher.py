@@ -13,7 +13,13 @@ import csv, os, subprocess, sys
 from datetime import datetime
 
 OUT         = os.path.dirname(os.path.abspath(__file__))
-RUN_LOG     = os.path.join(OUT, "yad2_run_log.csv")
+# Both legs' run logs. Watching only the sale log made the rent leg's two-week
+# freeze structurally invisible: run_all() scrapes sale then rent in one process,
+# so a run where sale succeeds and rent fails still refreshes the sale log and
+# reads as healthy. Staleness is judged on the WORST leg.
+RUN_LOGS    = [os.path.join(OUT, "yad2_run_log.csv"),
+               os.path.join(OUT, "yad2_run_log_rent.csv")]
+RUN_LOG     = RUN_LOGS[0]
 SCRAPER     = os.path.join(OUT, "yad2_scraper.py")
 WATCHER_LOG = os.path.join(OUT, "yad2_watcher.log")
 SCRAPER_OUT = os.path.join(OUT, "_scraper_run.log")
@@ -30,11 +36,11 @@ def log(decision, reason):
         f.write(f"{ts}  {decision:<20s}  {reason}\n")
 
 
-def latest_success_age_hours():
-    if not os.path.exists(RUN_LOG):
+def _leg_success_age_hours(run_log):
+    if not os.path.exists(run_log):
         return None
     last_success = None
-    with open(RUN_LOG, encoding="utf-8-sig") as f:
+    with open(run_log, encoding="utf-8-sig") as f:
         reader = csv.reader(f)
         next(reader, None)
         for row in reader:
@@ -49,17 +55,37 @@ def latest_success_age_hours():
     return (datetime.now() - dt).total_seconds() / 3600
 
 
+def latest_success_age_hours():
+    """Age of the STALEST leg, so one healthy leg cannot mask a frozen one.
+    Returns None only when no leg has ever logged a success."""
+    ages = [a for a in (_leg_success_age_hours(p) for p in RUN_LOGS) if a is not None]
+    return max(ages) if ages else None
+
+
+def per_leg_ages():
+    """(name, age) per leg, for the watcher log so a freeze is visible at a glance."""
+    return [(os.path.basename(p).replace("yad2_run_log", "").replace(".csv", "") or "sale",
+             _leg_success_age_hours(p)) for p in RUN_LOGS]
+
+
 def scraper_already_running():
     try:
+        # @(...) forces an array before .Count. Without it, a SINGLE match returns
+        # a bare CimInstance whose type adapter resolves .Count against the WMI
+        # object's own properties, not PowerShell's scalar fallback — yielding an
+        # empty string, hence 0, hence "no scraper running" in exactly the
+        # one-instance case this guard exists to detect.
         result = subprocess.run(
             ["powershell", "-NoProfile", "-Command",
-             "(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+             "@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
              "Where-Object { $_.CommandLine -like '*yad2_scraper.py*' }).Count"],
             capture_output=True, text=True, timeout=15
         )
         return int((result.stdout.strip() or "0")) > 0
     except Exception:
-        return False
+        # Fail CLOSED: an unreachable/slow WMI query must not be read as "nothing
+        # is running" and license a second concurrent scraper over the same files.
+        return True
 
 
 def in_scheduled_window():
@@ -75,9 +101,18 @@ def launch_scraper_detached():
     # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP — the scraper keeps running
     # after the watcher exits and Task Scheduler sees the watcher as done.
     flags = 0x00000008 | 0x00000200
-    out = open(SCRAPER_OUT, "w", encoding="utf-8")
+    # Append, never truncate: a detached scraper from an earlier launch holds its
+    # own handle at its own offset, so opening this shared path with "w" wiped a
+    # live run's diagnostics (and left the file NUL-padded). The wedged 6.6-day
+    # run's entire warm-up trace was lost this way.
+    out = open(SCRAPER_OUT, "a", encoding="utf-8")
+    out.write(f"\n=== launch {datetime.now():%Y-%m-%d %H:%M:%S} ===\n")
+    out.flush()
     subprocess.Popen(
-        [PYTHON, SCRAPER],
+        # -u: unbuffered. Redirected to a file, Python block-buffers stdout, so
+        # a healthy run's log stayed empty for its whole duration and looked
+        # wedged (2026-10-23: a finished run was nearly killed as "stuck").
+        [PYTHON, "-u", SCRAPER],
         stdout=out, stderr=subprocess.STDOUT, cwd=OUT,
         creationflags=flags, close_fds=False,
     )
@@ -99,7 +134,9 @@ def main():
         return
 
     age_str = f"{age:.1f}h" if age is not None else "n/a"
-    log("run", f"last success {age_str}, triggering scraper")
+    legs = ", ".join(f"{name}={a:.1f}h" if a is not None else f"{name}=never"
+                     for name, a in per_leg_ages())
+    log("run", f"stalest leg {age_str} ({legs}), triggering scraper")
     launch_scraper_detached()
 
 

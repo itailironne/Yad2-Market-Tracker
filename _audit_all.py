@@ -73,7 +73,8 @@ for r in listings:
     if "₪" not in p and "לא צוין" not in p:
         weird_price += 1
     rooms = r.get("rooms")
-    if rooms not in (None, "") and str(rooms) != "4": weird_rooms += 1
+    # The feed filter is rooms=4-5 (4, 4.5, 5) since 5-room tracking began 2026-07-11
+    if rooms not in (None, "") and str(rooms) not in ("4", "4.5", "5"): weird_rooms += 1
     floor = r.get("floor")
     try:
         if floor not in (None, "") and float(floor) > 30: weird_floor += 1
@@ -90,7 +91,7 @@ for r in listings:
         pass
 
 if weird_price: issue("WARN", "price", f"{weird_price} listings without ₪ prefix")
-if weird_rooms: issue("FAIL", "rooms", f"{weird_rooms} listings != 4 rooms (filter is 4-rooms only)")
+if weird_rooms: issue("FAIL", "rooms", f"{weird_rooms} listings outside 4-5 rooms (feed filter is rooms=4-5)")
 if weird_floor: issue("WARN", "floor", f"{weird_floor} listings with floor > 30")
 if weird_size:
     issue("WARN", "size_sqm", f"{weird_size} listings outside [30, 400] m²")

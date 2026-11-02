@@ -2,7 +2,7 @@ import asyncio, json, csv, os, re, sys, subprocess, time
 from dataclasses import dataclass
 from playwright.async_api import async_playwright
 from datetime import datetime, timedelta
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 # Force UTF-8 on stdout/stderr so Hebrew prints don't crash under Task Scheduler
 # (Windows defaults stdout to cp1252 when there's no attached console).
@@ -24,7 +24,7 @@ class DealConfig:
     pagination/scraping — not a value-split of one feed the way the 4-vs-5
     room bucket is — so each gets its own full set of output files. Rent
     prices are ~100-1000x smaller than sale prices (₪ thousands/month vs ₪
-    millions), so min_sane_price/min_pages_for_trust must differ per leg too
+    millions), so min_sane_price/min_listings_for_trust must differ per leg too
     or rent data gets filtered out entirely / false-flagged as a bot-block."""
     key: str                    # "sale" | "rent" — used in prints/logs
     feed_path: str              # "forsale" | "rent" — Yad2 URL path segment
@@ -37,14 +37,21 @@ class DealConfig:
     display_prev_file: str
     first_seen_file: str
     date_posted_file: str
+    date_unverified_file: str   # IDs whose date_posted is a first_seen guess, re-fetched each run
     pending_removals_file: str
     dom_log_file: str
     nb_history_file: str
     type_history_file: str
     rooms_history_file: str
     run_log_file: str
-    min_pages_for_trust: int    # pagination sanity threshold, see SALE/RENT_CFG
+    min_listings_for_trust: int # truncated-pagination floor (raw cards), see SALE/RENT_CFG
     min_sane_price: int         # stats/display outlier floor, see SALE/RENT_CFG
+    min_sane_ppsqm: float       # stats/display ₪-per-m² band, see SALE/RENT_CFG
+    max_sane_ppsqm: float       # (absolute price alone cannot separate a junk
+                                #  listing from a real luxury one — only ₪/m² can)
+    min_listings_fraction: float  # partial-scrape floor vs. previous run; MUST be
+                                  # per-leg — a small, shrinking feed like rent
+                                  # trips a sale-calibrated threshold every run
 
 def _rent_name(base_filename):
     root, ext = os.path.splitext(base_filename)
@@ -61,18 +68,38 @@ SALE_CFG = DealConfig(
     display_prev_file=os.path.join(OUT, "yad2_prev_display.json"),
     first_seen_file=os.path.join(OUT, "yad2_first_seen.json"),
     date_posted_file=os.path.join(OUT, "yad2_date_posted.json"),
+    date_unverified_file=os.path.join(OUT, "yad2_date_unverified.json"),
     pending_removals_file=os.path.join(OUT, "yad2_pending_removals.json"),
     dom_log_file=os.path.join(OUT, "yad2_dom_log.csv"),
     nb_history_file=os.path.join(OUT, "yad2_neighborhood_history.csv"),
     type_history_file=os.path.join(OUT, "yad2_type_history.csv"),
     rooms_history_file=os.path.join(OUT, "yad2_rooms_history.csv"),
     run_log_file=os.path.join(OUT, "yad2_run_log.csv"),
-    # Healthy Ra'anana 4-5-room SALE scrapes hit 20+ pages; a run that stops
-    # earlier almost always means Yad2 served a degraded/bot-throttled page.
-    min_pages_for_trust=10,
+    # Counted in raw listings, NOT pages: on ~2026-10-07 Yad2 went from 20 to 50
+    # cards per page, so a complete sale feed (~950 raw) now ends at page 19.
+    # The old `min_pages_for_trust=25` (tuned on 20-card pages: healthy runs hit
+    # 33-38) rejected every complete scrape as a "bot-block" and froze the sale
+    # leg for 16 days. Healthy runs yield 660-950 raw listings; the one known
+    # truncation (2026-09-25) yielded 370. 500 rejects that and passes the rest,
+    # regardless of page size. Relative drops are caught later by
+    # min_listings_fraction.
+    min_listings_for_trust=500,
     # Sale asking prices are always well above this; anything lower is a
     # data-entry typo (e.g. a ₪12,700 "price"), not a real listing.
     min_sane_price=500_000,
+    # The absolute floor above cannot catch everything: ₪590,000/95 m² and
+    # ₪680,000/100 m² listings clear it while sitting at ~₪6,200-6,800/m²
+    # against a ~₪28,000/m² market. Raising the floor is not an option — it
+    # would delete real luxury stock (₪21M/600 m² is a legitimate ₪35,000/m²).
+    # ₪/m² is the only measure that separates the two. Observed on 2026-09-01:
+    # junk tops out at 6,800/m², the cheapest genuine listing is 13,462/m²
+    # (₪7M, 520 m² house), and the dearest genuine is 54,632/m². The band
+    # below sits in that gap with headroom on both sides.
+    min_sane_ppsqm=10_000,
+    max_sane_ppsqm=100_000,
+    # Sale's feed is large (~690) and stable, so a >10% drop really is suspicious.
+    # This is the value the guard was originally tuned to on 2026-05-17.
+    min_listings_fraction=0.9,
 )
 
 RENT_CFG = DealConfig(
@@ -86,6 +113,7 @@ RENT_CFG = DealConfig(
     display_prev_file=os.path.join(OUT, _rent_name("yad2_prev_display.json")),
     first_seen_file=os.path.join(OUT, _rent_name("yad2_first_seen.json")),
     date_posted_file=os.path.join(OUT, _rent_name("yad2_date_posted.json")),
+    date_unverified_file=os.path.join(OUT, _rent_name("yad2_date_unverified.json")),
     pending_removals_file=os.path.join(OUT, _rent_name("yad2_pending_removals.json")),
     dom_log_file=os.path.join(OUT, _rent_name("yad2_dom_log.csv")),
     nb_history_file=os.path.join(OUT, _rent_name("yad2_neighborhood_history.csv")),
@@ -97,10 +125,34 @@ RENT_CFG = DealConfig(
     # with headroom below that for normal day-to-day inventory dips (reusing
     # sale's threshold of 10 here would make every healthy rent run look like
     # a bot-block, since rent never reaches 10 pages at all).
-    min_pages_for_trust=5,
+    # Rent's inventory is ~4x smaller than sale's and shrinking (201 -> 143 over
+    # Sep-Oct). Measured over 39 successful runs, 23 of them land at pnum=5 —
+    # EXACTLY the old threshold of 5, i.e. zero headroom: the guard passes only
+    # because `5 < 5` is false. Lose one page of inventory and every healthy rent
+    # run starts failing as a false bot-block. 3 keeps real protection (a genuine
+    # block dies on page 1-2) while leaving room for the feed to keep shrinking.
+    # The comment that justified 5 cited a _probe_rent_feed.py that doesn't exist.
+    # Since Yad2's move to 50-card pages the ~138-listing rent feed is exactly 3
+    # pages, back to zero headroom — so this is now a listing count, like sale's.
+    # A genuine block dies on page 1 (<= 50 raw); 60 rejects that, and
+    # min_listings_fraction (0.75) covers a truncation further in.
+    min_listings_for_trust=60,
     # Placeholder — real 4-5 room monthly rent in Ra'anana is roughly
     # ₪3,000-15,000. Re-tune after seeing real scraped data.
     min_sane_price=1_500,
+    # Deliberately LOOSE, unlike sale. Rent has no junk/genuine gap to exploit:
+    # monthly rent does not scale with floor area, so the cheapest ₪/m² entries
+    # (₪5,000 for 250 m², = ₪20/m²) are real houses, not typos. Observed range
+    # on the 2026-08-18 snapshot was 20-144/m². These bounds are guard-rails
+    # against a mis-keyed digit only; tightening them would delete real stock.
+    min_sane_ppsqm=10,
+    max_sane_ppsqm=500,
+    # Rent's feed is ~4x smaller (176 vs ~690) and has been shrinking steadily
+    # (192 -> 191 -> 188 -> 176 over Aug), so the same 10% drop that would be
+    # alarming for sale is ordinary month-to-month movement here. Sale's 0.9
+    # demanded >=158 listings against a frozen 176 baseline and rejected every
+    # rent run for two weeks straight.
+    min_listings_fraction=0.75,
 )
 DEAL_CONFIGS = [SALE_CFG, RENT_CFG]
 
@@ -111,18 +163,31 @@ DEAL_CONFIGS = [SALE_CFG, RENT_CFG]
 # not path-specific, so warming once (on the sale URL) also clears the rent
 # path — no need to pay the ~40s+ visible-Chrome warm-up twice.
 PROFILE_DIR       = os.path.join(OUT, ".yad2_chrome_profile")
-# Single-instance lock. The scraper is launched from three places (the 08:00/
+# Single-instance lock. The scraper is launched from three places (the 09:00/
 # 20:00 scheduled tasks, the hourly watchdog, and manual runs). Two runs at once
 # would fight over PROFILE_DIR (a Chrome profile allows only one live process)
 # and clobber each other's output files, so only one may hold this lock.
 LOCK_FILE         = os.path.join(OUT, ".yad2_scraper.lock")
 
-# If the new run has fewer than this fraction of the previous run's listings,
-# refuse to overwrite the baseline files — likely a partial scrape. Tightened
-# from 0.6 → 0.9 after a 2026-05-17 run (262/363 = 72%) slipped past the old
-# threshold and falsely marked ~100 listings as removed. Real daily churn on a
-# stable search is <10%; anything beyond that warrants a retry.
-MIN_LISTINGS_FRACTION_VS_PREV = 0.9
+# Baseline-age escape hatch for the partial-scrape guard (cfg.min_listings_fraction).
+# The fraction assumes the normal ~12h cadence, where a 10% drop really is
+# anomalous. After a multi-day gap the comparison is no longer "daily churn" and
+# the guard can no longer tell a partial scrape from genuine turnover. Worse, a
+# rejected run never updates the baseline, so a stale baseline latches the guard
+# ON permanently — that ratchet froze the rent leg from 2026-08-18 to 2026-09-01
+# (baseline stuck at 176, every later run measured against it and refused).
+# Past this age we fall back to a looser floor that still catches a catastrophic
+# partial scrape without demanding week-old inventory levels.
+#
+# 0.5 was TOO LOOSE and caused a regression: the 2026-09-25 07:28 run captured
+# only 17 pages / 370 listings against a 43h-old baseline of 711 (52%), cleared
+# the relaxed 50% floor, saved, and falsely retired 33 listings. The whole point
+# of this guard is to stop exactly that. 0.5 was never needed either — the rent
+# ratchet it was written for sat at 157/176 = 89.2%, which clears 0.75 on its
+# own. Keep the relaxation meaningful but never permissive enough to admit a
+# half-captured feed.
+STALE_BASELINE_HOURS    = 36
+STALE_BASELINE_FRACTION = 0.75
 # Yad2's feed is unstable — boosted/promoted listings flap in and out between
 # runs, so a listing simply missing from ONE run is often still live (verified:
 # a listing absent from a scrape was confirmed active on yad2 minutes later).
@@ -130,6 +195,13 @@ MIN_LISTINGS_FRACTION_VS_PREV = 0.9
 # reappearance cancels the pending removal. Kills false "removed" events that
 # were inflating the removed/absorption/DOM stats.
 REMOVAL_GRACE_RUNS = 2
+# ...but runs alone are the wrong unit. The watcher can fire several times an
+# hour, so two misses can span 30 minutes and confirm a "removal" for a listing
+# that was merely missed twice by a slow-rendering page. Measured over 13
+# archived snapshots, 116 listings were absent for 2+ consecutive runs and later
+# came back — every one of them would have been logged as removed. Demand BOTH
+# thresholds: N consecutive misses AND this much wall-clock since the first one.
+REMOVAL_GRACE_HOURS = 24
 
 def parse_price_num(p):
     p = str(p).replace(",","").replace("\u20aa","").replace("\u20aa","").strip()
@@ -497,6 +569,42 @@ async def ensure_radware_clearance(p, url, warm_waits=(40, 55, 70)):
     )
 
 
+# Feed pages lazy-render their cards, so how many exist in the DOM depends on
+# network/CPU luck at the instant we look. Reading after a fixed sleep captured
+# 5-17 cards on pages whose median yield is 20 — silently dropping ~40-60
+# listings per run at random. Measured over 13 archived snapshots: every run had
+# 3-11 pages yielding under 18 cards, run-to-run counts swung +/-10%, and 447 of
+# 920 distinct listings (48.6%) vanished for a run and came back. Those gaps
+# feed REMOVAL_GRACE_RUNS=2 and get confirmed as real removals, so the noise
+# reaches the removed/new charts and DOM, not just the count.
+CARD_SELECTOR       = "[class*=feedItemBox]"
+CARD_SETTLE_POLL_MS = 400    # gap between count probes
+CARD_SETTLE_STABLE  = 3      # consecutive equal counts that mean "done rendering"
+CARD_SETTLE_MAX_MS  = 12000  # ceiling, so a broken page can't stall the run
+CARD_COUNT_WARN     = 45     # full pages hold 50 (20 before ~2026-10-07); fewer => log it
+
+async def settle_card_count(pg):
+    """Block until the feed's card count stops growing, then return it.
+
+    Replaces a fixed `wait_for_timeout`: we poll the card count and only proceed
+    once it has held steady across CARD_SETTLE_STABLE consecutive probes, giving
+    slow pages the time they need while fast ones cost barely more than before.
+    Returns the final count so the caller can flag a page that came up short."""
+    stable, last, waited = 0, -1, 0
+    while waited < CARD_SETTLE_MAX_MS:
+        n = len(await pg.query_selector_all(CARD_SELECTOR))
+        if n > 0 and n == last:
+            stable += 1
+            if stable >= CARD_SETTLE_STABLE:
+                return n
+        else:
+            stable = 0
+        last = n
+        await pg.wait_for_timeout(CARD_SETTLE_POLL_MS)
+        waited += CARD_SETTLE_POLL_MS
+    return last if last > 0 else 0
+
+
 async def run_leg(p, cfg, first_seen, today):
     """Scrape one deal-type leg (sale or rent) via the already-warmed shared
     Playwright driver `p`. Opens/closes its own browser context so no
@@ -544,8 +652,14 @@ async def run_leg(p, cfg, first_seen, today):
             f"challenge page); will retry with a fresh warm."
         )
     while True:
-        print("  Page", pnum)
-        await pg.wait_for_timeout(2000)
+        # Wait for the cards to finish rendering rather than sleeping a fixed
+        # 2s and reading whatever happens to be there (see settle_card_count).
+        n_cards = await settle_card_count(pg)
+        if n_cards < CARD_COUNT_WARN:
+            print(f"  Page {pnum}: only {n_cards} cards after settle "
+                  f"(full page = 50) — possible partial render")
+        else:
+            print(f"  Page {pnum}: {n_cards} cards")
 
         # Extract dates from React fiber state on this page (zero extra requests)
         try:
@@ -650,11 +764,12 @@ async def run_leg(p, cfg, first_seen, today):
     # where the "next" button is missing/disabled even though more results
     # exist — the loop above breaks cleanly and we'd save garbage. Raise
     # so run_leg_with_retry retries with backoff instead of corrupting state.
-    if pnum < cfg.min_pages_for_trust:
+    if len(listings) < cfg.min_listings_for_trust:
         await context.close()
         raise RuntimeError(
-            f"[{cfg.key}] Pagination stopped at page {pnum} (expected >= {cfg.min_pages_for_trust}); "
-            f"likely bot-block. Refusing to save partial snapshot."
+            f"[{cfg.key}] Pagination stopped at page {pnum} with {len(listings)} listings "
+            f"(expected >= {cfg.min_listings_for_trust}); likely bot-block. "
+            f"Refusing to save partial snapshot."
         )
 
     # ── Dedupe by listing ID (Yad2 boosts paid ads to multiple search-result pages
@@ -727,12 +842,29 @@ async def run_leg(p, cfg, first_seen, today):
     except:
         date_cache = {}
 
+    # IDs whose cached date is NOT a real Yad2 "published" date but the
+    # first_seen guess from the final fallback below. They used to be cached
+    # like real dates and never re-fetched, so a one-off fetch failure froze a
+    # wrong date for the listing's lifetime — verified on 2026-10-23 against
+    # Yad2: a listing published 2025-08-12 stored as 2026-09-17, understating its
+    # days-on-market by 13 months (3 of 45 sampled listings were wrong). Guessed
+    # dates now stay in this set and are re-fetched every run until a real one
+    # is found. Seeded on first use with every cached date equal to first_seen,
+    # since that is exactly what the old fallback wrote.
+    try:
+        with open(cfg.date_unverified_file, encoding="utf-8") as f:
+            unverified = set(json.load(f))
+    except Exception:
+        unverified = {lid for lid, d in date_cache.items() if d and first_seen.get(lid) == d}
+
     print(f"  React fiber dates found: {len(intercepted_dates)}")
 
     # Apply fiber dates to listings (date_cache is keyed by listing-ID)
     for r in listings:
         lid = extract_id_from_url(r.get("url", ""))
-        date = intercepted_dates.get(lid) or date_cache.get(lid, "")
+        date = intercepted_dates.get(lid) or ("" if lid in unverified else date_cache.get(lid, ""))
+        if date and intercepted_dates.get(lid):
+            unverified.discard(lid)
         r["date_posted"] = date
         if date and lid:
             date_cache[lid] = date
@@ -769,6 +901,7 @@ async def run_leg(p, cfg, first_seen, today):
                     lid = extract_id_from_url(r.get("url", ""))
                     if lid:
                         date_cache[lid] = d
+                        unverified.discard(lid)
                     fetched_ok += 1
             if batch_start + batch_size < len(still_missing):
                 print(f"  ...{min(batch_start+batch_size, len(still_missing))}/{len(still_missing)} done")
@@ -789,11 +922,18 @@ async def run_leg(p, cfg, first_seen, today):
                 r["date_posted"] = today
                 first_seen[lid] = today
                 date_cache[lid] = today
+            unverified.add(lid)
 
     matched = sum(1 for r in listings if r.get("date_posted"))
     print(f"[{cfg.key}]   Total dates resolved: {matched}/{len(listings)} listings")
     with open(cfg.date_posted_file, "w", encoding="utf-8") as f:
         json.dump(date_cache, f, ensure_ascii=False)
+    # Only IDs still live matter; removed listings can't be re-fetched anyway.
+    live_ids = {extract_id_from_url(r.get("url", "")) for r in listings}
+    unverified &= live_ids
+    print(f"[{cfg.key}]   Unverified (guessed) dates: {len(unverified)}")
+    with open(cfg.date_unverified_file, "w", encoding="utf-8") as f:
+        json.dump(sorted(unverified), f)
 
     await context.close()
     return listings, pnum
@@ -833,15 +973,33 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
             pending_removals = {}
 
     # Second-line defense: even if pagination didn't trip the early-stop guard,
-    # a sudden ≥40% drop vs the previous run almost always means we missed
-    # listings (silent partial scrape). Refuse to overwrite the baseline so
-    # tomorrow's diff doesn't cascade more false-removals.
-    if prev_map and len(curr_map) < MIN_LISTINGS_FRACTION_VS_PREV * len(prev_map):
+    # a sudden drop vs the previous run often means we missed listings (silent
+    # partial scrape). Refuse to overwrite the baseline so tomorrow's diff
+    # doesn't cascade more false-removals.
+    #
+    # The threshold is per-leg (see cfg.min_listings_fraction) and relaxes once
+    # the baseline is stale: comparing today against a week-old snapshot cannot
+    # distinguish a partial scrape from a week of real turnover, and rejecting
+    # the run would leave that same stale baseline in place for the next one to
+    # be judged against — the ratchet that froze rent for two weeks.
+    fraction = cfg.min_listings_fraction
+    baseline_note = ""
+    try:
+        baseline_age_h = (time.time() - os.path.getmtime(cfg.prev_file)) / 3600
+    except OSError:
+        baseline_age_h = None
+    if baseline_age_h is not None and baseline_age_h > STALE_BASELINE_HOURS:
+        fraction = min(fraction, STALE_BASELINE_FRACTION)
+        baseline_note = (f" [baseline is {baseline_age_h:.0f}h old — threshold "
+                         f"relaxed to {int(fraction*100)}%]")
+        print(f"[{cfg.key}] Baseline {baseline_age_h:.0f}h old; partial-scrape "
+              f"threshold relaxed to {int(fraction*100)}%.")
+    if prev_map and len(curr_map) < fraction * len(prev_map):
         raise RuntimeError(
             f"[{cfg.key}] Listing count dropped from {len(prev_map)} to {len(curr_map)} "
             f"({len(curr_map)/len(prev_map)*100:.1f}% of previous, "
-            f"threshold {int(MIN_LISTINGS_FRACTION_VS_PREV*100)}%); "
-            f"likely partial scrape. Refusing to save."
+            f"threshold {int(fraction*100)}%); "
+            f"likely partial scrape. Refusing to save.{baseline_note}"
         )
 
     curr_ids = set(curr_map)
@@ -859,6 +1017,7 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
 
     confirmed_removed = {}   # lid -> {"record": {...}, "first_seen": date}
     still_pending     = {}
+    now_ts = time.time()
     for lid in absent_now:
         entry  = pending_removals.get(lid) or {}
         misses = entry.get("misses", 0) + 1
@@ -866,10 +1025,15 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
         if record is None:
             continue
         fs = entry.get("first_seen") or first_seen.get(lid, today)
-        if misses >= REMOVAL_GRACE_RUNS:
+        # Wall-clock clock starts at the FIRST miss and survives across runs, so
+        # a burst of closely-spaced runs can't race a listing to "removed".
+        first_missed = entry.get("first_missed_at") or now_ts
+        elapsed_h = (now_ts - first_missed) / 3600
+        if misses >= REMOVAL_GRACE_RUNS and elapsed_h >= REMOVAL_GRACE_HOURS:
             confirmed_removed[lid] = {"record": record, "first_seen": fs}
         else:
-            still_pending[lid] = {"misses": misses, "record": record, "first_seen": fs}
+            still_pending[lid] = {"misses": misses, "record": record,
+                                  "first_seen": fs, "first_missed_at": first_missed}
     pending_removals = still_pending
 
     removed_ids = set(confirmed_removed)
@@ -883,6 +1047,21 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
     for lid in new_ids:
         if lid and lid not in first_seen:
             first_seen[lid] = today
+
+    # Self-heal: every live listing must have a first_seen. Only NEW ids were
+    # ever added, so a listing that was already in the baseline but missing from
+    # first_seen (54 such on 2026-10-23, all first archived on 2026-09-23 /
+    # 2026-10-06 — overlapping runs from before the single-instance lock, each
+    # saving its own stale copy of first_seen) was never added, and its eventual
+    # removal was logged with DOM 0. Backfill from the earliest snapshot in the
+    # append-only archive, which is when we really first saw it.
+    missing_fs = [lid for lid in curr_ids if lid and lid not in first_seen]
+    if missing_fs:
+        earliest = _archive_first_seen(cfg.archive_file, set(missing_fs))
+        for lid in missing_fs:
+            first_seen[lid] = earliest.get(lid, today)
+        print(f"[{cfg.key}] Backfilled first_seen for {len(missing_fs)} listing(s) "
+              f"({len(earliest)} from the archive)")
 
     # ── DOM log for confirmed removed listings ────────────────────────────────
     dom_days_list = []
@@ -945,6 +1124,12 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
         except Exception: s = 0
         if p is not None and p < cfg.min_sane_price: return False
         if s and (s < 25 or s > 1000): return False
+        # ₪/m² band — only applied when BOTH figures are present, so a listing
+        # missing either one is still kept (matching the policy above).
+        if p is not None and s:
+            ppsqm = p / s
+            if ppsqm < cfg.min_sane_ppsqm or ppsqm > cfg.max_sane_ppsqm:
+                return False
         return True
     stats_listings = [r for r in listings if _stats_sane(r)]
 
@@ -1079,9 +1264,17 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
     # ── Rooms history (bucketed 4 vs 5) ──────────────────────────────────────────
     rooms_prices = defaultdict(list)
     rooms_ppsqm  = defaultdict(list)
+    # Bucket membership is counted separately from the price list. Prices are
+    # only collected for listings with a parseable price, but a listing with no
+    # price ("price on request") is still a real listing in that room bucket.
+    # Using len(prices) as the count made the room buckets sum to LESS than
+    # yad2_history's count (which is len(stats_listings)) — a ~9-listing gap
+    # that made the two files silently disagree about market size.
+    rooms_count  = Counter()
     for r in stats_listings:
         rb = rooms_bucket(r.get("rooms"))
         if not rb: continue
+        rooms_count[rb] += 1
         p = parse_price_num(r.get("price",""))
         try: s = float(r.get("size_sqm") or 0)
         except: s = 0
@@ -1095,12 +1288,14 @@ def finalize_leg(cfg, listings, pnum, first_seen, today, now):
         w = csv.writer(f)
         if not rooms_exists:
             w.writerow(rooms_cols)
-        for rb in sorted(rooms_prices):
+        for rb in sorted(rooms_count):
             ps = sorted(rooms_prices[rb])
             ppsqm_avg = round(sum(rooms_ppsqm[rb]) / len(rooms_ppsqm[rb])) if rooms_ppsqm.get(rb) else 0
             doms = rooms_active_doms.get(rb, [])
             r_dom = round(sum(doms) / len(doms), 1) if doms else ""
-            w.writerow([now, rb, round(sum(ps) / len(ps)), ps[len(ps)//2], ppsqm_avg, len(ps), r_dom])
+            avg_p = round(sum(ps) / len(ps)) if ps else 0
+            med_p = ps[len(ps)//2] if ps else 0
+            w.writerow([now, rb, avg_p, med_p, ppsqm_avg, rooms_count[rb], r_dom])
 
     # ── Save files (write to temp then rename so a crash never zeros the file) ──
     import tempfile
@@ -1180,7 +1375,7 @@ def log_error(run_log_file, error_msg):
                         "avg_price_per_sqm","absorption_rate","survival_30d","avg_dom","error"])
         w.writerow([now, "error", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", error_msg])
 
-async def run_leg_with_retry(p, cfg, first_seen, max_attempts=6,
+async def run_leg_with_retry(p, cfg, first_seen, max_attempts=2,
                               retry_delays_s=(300, 600, 1200, 2400, 3600)):
     """Run one leg (scrape + finalize) with retry-and-backoff for transient
     failures (click timeouts, network blips, bot blocks) — scoped to a
@@ -1194,9 +1389,9 @@ async def run_leg_with_retry(p, cfg, first_seen, max_attempts=6,
     mirroring the original run_with_retry()'s behavior where every retry of
     run() re-warmed as its first line.
 
-    Default budget: 6 attempts spread over ~2¼ hours (5min, 10min, 20min,
-    40min, 60min) per leg — gives heavy Yad2 throttles time to self-heal
-    before giving up. Never raises — owns logging its own leg's outcome."""
+    Default budget: 2 attempts, 5min apart — one retry after the first
+    failure, then give up. Never raises — owns logging its own leg's
+    outcome."""
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
@@ -1212,9 +1407,36 @@ async def run_leg_with_retry(p, cfg, first_seen, max_attempts=6,
                 delay = retry_delays_s[min(attempt - 1, len(retry_delays_s) - 1)]
                 print(f"  [{cfg.key}] retrying in {delay}s ({delay // 60} min)...")
                 await asyncio.sleep(delay)
-                await ensure_radware_clearance(p, url=cfg.url)
+                # The re-warm must not escape this handler. It used to be awaited
+                # bare, so a failed warm raised straight out of the "never raises"
+                # contract into run_all()'s top-level handler, which logs to BOTH
+                # legs' run logs — overwriting this leg's REAL error with a
+                # generic Radware message. That is why a rent leg failing the
+                # partial-scrape guard was reported for two weeks as a bot-block.
+                try:
+                    await ensure_radware_clearance(p, url=cfg.url)
+                except Exception as warm_err:
+                    print(f"  [{cfg.key}] re-warm failed ({warm_err}); "
+                          f"continuing to next attempt anyway.")
     print(f"[{cfg.key}] ERROR (after retries): {last_err}")
     log_error(cfg.run_log_file, str(last_err))
+
+
+def _archive_first_seen(archive_file, ids):
+    """Earliest archive snapshot date (YYYY-MM-DD, Saturday->Friday) per listing
+    ID, for the requested IDs only."""
+    out = {}
+    try:
+        with open(archive_file, encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                lid = extract_id_from_url(row.get("url", ""))
+                if lid in ids:
+                    d = shift_saturday_to_friday(str(row.get("snapshot_time", ""))[:10])
+                    if d and (lid not in out or d < out[lid]):
+                        out[lid] = d
+    except OSError:
+        pass
+    return out
 
 
 def _load_json_or_default(path, default):
@@ -1227,12 +1449,13 @@ def _load_json_or_default(path, default):
         return default
 
 
-async def ensure_radware_clearance_with_retry(p, url, max_attempts=6,
+async def ensure_radware_clearance_with_retry(p, url, max_attempts=2,
                                                retry_delays_s=(300, 600, 1200, 2400, 3600)):
     """Wrap ensure_radware_clearance with the same retry-and-backoff budget as
-    run_leg_with_retry (~2¼ hours). Previously a single failed warm-up (e.g.
-    the browser itself crashing on launch) aborted the entire invocation with
-    no retry at all — see the 08/08 run_log entries. Re-raises after
+    run_leg_with_retry (2 attempts, 5min apart). Previously a single failed
+    warm-up (e.g. the browser itself crashing on launch) aborted the entire
+    invocation with no retry at all — see the 08/08 run_log entries. Now
+    allows exactly one retry instead of retrying repeatedly. Re-raises after
     exhausting every attempt so run_all()'s top-level handler still logs a
     final failure instead of retrying forever."""
     for attempt in range(1, max_attempts + 1):
