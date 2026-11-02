@@ -53,7 +53,7 @@ python yad2_scraper.py
 ```
 
 - Takes ~10–15 minutes (sale leg: 18+ pages + date fetching; rent leg: ~8 pages + date fetching — one shared warm-up covers both)
-- Scheduled to run automatically at **08:00** and **20:00** daily
+- Scheduled to run automatically at **09:00** and **20:00** daily
 - Output is printed to console: pages scraped, dates fetched, changes detected
 - **Opens real Chrome windows** for ~1 minute at the start (the anti-bot warm-up,
   see [Bot Protection](#bot-protection-radware--the-chrome-warm-up) below), then a
@@ -317,11 +317,14 @@ pandas
 plotly
 ```
 
+Pinned versions are in `requirements.txt`. Setting up on a new machine:
+see **[MIGRATION.md](MIGRATION.md)**.
+
 ---
 
 ## Automation Schedule
 
-The scraper is configured to run automatically at **08:00** and **20:00** every day via Windows Task Scheduler. Each run takes ~10–15 minutes (sale + rent legs combined).
+The scraper is configured to run automatically at **09:00** and **20:00** every day via Windows Task Scheduler. Each run takes ~10–15 minutes (sale + rent legs combined).
 
 ### Important Task Scheduler settings
 For each task (Yad2_Morning / Yad2_Evening), under **Properties**:
@@ -332,7 +335,7 @@ For each task (Yad2_Morning / Yad2_Evening), under **Properties**:
 - **Settings tab** → ✅ *Run task as soon as possible after a scheduled start is missed*
 - **Conditions tab** → ✅ *Wake the computer to run this task*
 
-Without these, if the computer is asleep or logged off at 08:00 / 20:00 the run is silently skipped — and you'll see the yellow ⚠️ "stale" banner on the dashboard the next time you open it.
+Without these, if the computer is asleep or logged off at 09:00 / 20:00 the run is silently skipped — and you'll see the yellow ⚠️ "stale" banner on the dashboard the next time you open it.
 
 A companion task **Yad2_Watcher** runs `yad2_watcher.py` hourly: if the last
 successful run is more than ~13h old (e.g. the machine was asleep at both
