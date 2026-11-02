@@ -1,5 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import json, os, re
@@ -15,16 +16,89 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap');
+/* ═══════════════════════════════════════════════════════════════════════════
+   Anthropic / Claude.com design system, adapted for a Hebrew RTL data surface.
+
+   TYPEFACE SUBSTITUTION (deliberate, documented):
+   The source system specifies Copernicus/Tiempos serif for display and
+   StyreneB/Inter for body. None of those — nor the documented open-source
+   substitutes (Cormorant Garamond, EB Garamond) — contain Hebrew glyphs, and
+   this dashboard is Hebrew-first. Rendering it in them would silently fall back
+   per-glyph and destroy the type system it is meant to express.
+   So we preserve the SPLIT (editorial serif display + humanist sans body),
+   which is the actual brand voice, using Hebrew-capable faces:
+     display -> Frank Ruhl Libre  (Hebrew editorial serif, weight 400, negative
+                tracking — the closest Hebrew analogue to Copernicus)
+     body    -> Assistant         (humanist Hebrew sans, not geometric — the
+                same reasoning that makes Inter an acceptable StyreneB stand-in)
+     code    -> JetBrains Mono    (as specified; Latin-only is fine here)
+   Latin-only text falls through to EB Garamond / Inter inside the same stacks.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    /* ── Brand & accent ── */
+    --primary:            #cc785c;
+    --primary-active:     #a9583e;
+    --primary-disabled:   #e6dfd8;
+    --accent-teal:        #5db8a6;
+    --accent-amber:       #e8a55a;
+
+    /* ── Surface ── */
+    --canvas:             #faf9f5;
+    --surface-soft:       #f5f0e8;
+    --surface-card:       #efe9de;
+    --surface-cream-strong:#e8e0d2;
+    --surface-dark:       #181715;
+    --surface-dark-elevated:#252320;
+    --surface-dark-soft:  #1f1e1b;
+    --hairline:           #e6dfd8;
+    --hairline-soft:      #ebe6df;
+
+    /* ── Text ── */
+    --ink:                #141413;
+    --body-strong:        #252523;
+    --body:               #3d3d3a;
+    --muted:              #6c6a64;
+    --muted-soft:         #8e8b82;
+    --on-primary:         #ffffff;
+    --on-dark:            #faf9f5;
+    --on-dark-soft:       #a09d96;
+
+    /* ── Semantic ── */
+    --success:            #5db872;
+    --warning:            #d4a017;
+    --error:              #c64545;
+
+    /* ── Radius ── */
+    --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-pill: 9999px;
+
+    /* ── Spacing ── */
+    --s-xxs: 4px; --s-xs: 8px; --s-sm: 12px; --s-md: 16px;
+    --s-lg: 24px; --s-xl: 32px; --s-xxl: 48px;
+
+    /* ── Type stacks ── */
+    --font-display: "Frank Ruhl Libre", "EB Garamond", Garamond, "Times New Roman", serif;
+    --font-body:    "Assistant", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body, [class*="css"] {
-    font-family: "Inter", "Heebo", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 #MainMenu, footer, header { visibility: hidden; }
-.stApp { background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
+
+/* Cream canvas is the brand's defining choice — flat, never a gradient, and
+   never the cool gray-white every other analytics tool ships with. */
+.stApp { background: var(--canvas); }
+
 /* Move the sidebar to the RTL-conventional right side using flex `order`
    (stAppViewContainer is display:flex/row) instead of flipping `direction`.
    `direction` inherits into every descendant, including BaseWeb's Slider,
@@ -34,438 +108,511 @@ html, body, [class*="css"] {
    itself, so it sidesteps that entirely. */
 [data-testid="stAppViewContainer"] > [data-testid="stSidebar"] { order: 2; }
 [data-testid="stAppViewContainer"] > section.main { order: 1; }
-.block-container { max-width: 1700px !important; padding-top: 0.5rem !important; padding-left: 2rem !important; padding-right: 2rem !important; direction: rtl; }
+.block-container {
+    max-width: 1700px !important;
+    padding-top: 0.5rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    direction: rtl;
+}
 [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
 .element-container { margin-bottom: 0 !important; }
-
-/* ── Top filter bar widgets ─────────────────────────────── */
-[data-testid="stSlider"] label,
-[data-testid="stSelectbox"] label,
-.stSlider label, .stSelectbox label {
-    color: #475569 !important;
-    font-size: 0.68rem !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    padding: 0 0 2px 0 !important;
-    margin: 0 !important;
-    line-height: 1.2 !important;
-}
-[data-testid="stSelectbox"] [data-baseweb="select"] > div {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 8px !important;
-    min-height: 34px !important;
-    font-size: 0.82rem !important;
-    color: #0f172a !important;
-}
-/* Give the thumb value bubble vertical room so it never collides with the
-   field label above it, and put it on-brand instead of the default red. */
-[data-testid="stSlider"] { padding-top: 16px !important; }
-[data-testid="stSlider"] [data-baseweb="slider"] { padding-top: 6px !important; }
-[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div:last-child,
-[data-testid="stSlider"] div[role="slider"] { color: #2563eb !important; }
-[data-testid="stTickBar"] { margin-top: 2px !important; }
-[data-testid="stTickBarMin"], [data-testid="stTickBarMax"] {
-    font-size: 0.64rem !important; color: #94a3b8 !important; font-weight: 600 !important;
-}
-[data-testid="stSidebar"] { direction: rtl; }
-[data-testid="stSidebar"] * { text-align: right; }
 
 /* Keep numerics/charts LTR-friendly inside RTL container */
 .kpi-value, .d-value, .stPlotlyChart, .ag-root-wrapper, .stDataFrame { direction: ltr; }
 .kpi-value, .d-value { text-align: right; }
 
-/* ── Sidebar / nav rail ──────────────────────────────── */
+/* ── Top filter bar widgets ─────────────────────────────── */
+[data-testid="stSlider"] label,
+[data-testid="stSelectbox"] label,
+.stSlider label, .stSelectbox label {
+    color: var(--muted) !important;
+    font-family: var(--font-body) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    padding: 0 0 2px 0 !important;
+    margin: 0 !important;
+    line-height: 1.4 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    background: var(--canvas) !important;
+    border: 1px solid var(--hairline) !important;
+    border-radius: var(--r-md) !important;
+    min-height: 40px !important;
+    font-family: var(--font-body) !important;
+    font-size: 14px !important;
+    color: var(--ink) !important;
+}
+[data-testid="stSlider"] { padding-top: 16px !important; }
+[data-testid="stSlider"] [data-baseweb="slider"] { padding-top: 6px !important; }
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div:last-child,
+[data-testid="stSlider"] div[role="slider"] { color: var(--primary) !important; }
+[data-testid="stTickBar"] { margin-top: 2px !important; }
+[data-testid="stTickBarMin"], [data-testid="stTickBarMax"] {
+    font-size: 12px !important; color: var(--muted-soft) !important; font-weight: 500 !important;
+}
+[data-testid="stSidebar"] { direction: rtl; }
+[data-testid="stSidebar"] * { text-align: right; }
+
+/* ── Sidebar: the dark product-chrome rail ────────────────
+   The system's cream-to-dark contrast is its pacing mechanism. On a single-view
+   dashboard there are no page bands to alternate, so the rail carries the dark
+   surface and the data canvas stays cream. */
 [data-testid="stSidebar"] {
-    background: #ffffff !important;
-    border-left: 1px solid #e2e8f0 !important;
-    box-shadow: -1px 0 3px rgba(15,23,42,0.03);
-    width: 252px !important; min-width: 252px !important;
+    background: var(--surface-dark) !important;
+    border-left: none !important;
+    width: 260px !important; min-width: 260px !important;
 }
 [data-testid="stSidebar"] .stSelectbox label,
 [data-testid="stSidebar"] .stSlider label {
-    color: #475569 !important; font-size: 0.7rem !important; font-weight: 700 !important;
-    text-transform: uppercase !important; letter-spacing: 0.1em !important;
+    color: var(--on-dark-soft) !important;
+    font-size: 12px !important; font-weight: 500 !important;
+    text-transform: uppercase !important; letter-spacing: 1.5px !important;
 }
 [data-testid="stSidebar"] [data-baseweb="select"] > div {
-    background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 10px !important;
-    color: #0f172a !important; font-size: 0.88rem !important; transition: all 0.15s;
+    background: var(--surface-dark-elevated) !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--r-md) !important;
+    color: var(--on-dark) !important; font-size: 14px !important;
 }
-[data-testid="stSidebar"] [data-baseweb="select"] > div:hover {
-    border-color: #cbd5e1 !important; background: #ffffff !important;
-}
+[data-testid="stSidebar"] [data-baseweb="select"] svg { fill: var(--on-dark-soft) !important; }
 
-.sidebar-brand { padding: 18px 0 24px; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px; }
-.sidebar-brand .brand-mark {
-    width: 50px; height: 50px;
-    background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
-    border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 14px; box-shadow: 0 8px 20px rgba(37,99,235,0.25), 0 2px 4px rgba(37,99,235,0.15);
+.sidebar-brand {
+    padding: var(--s-lg) 0 var(--s-lg);
+    border-bottom: 1px solid var(--surface-dark-elevated);
+    margin-bottom: var(--s-lg);
 }
-.sidebar-brand .brand-mark svg { width: 24px; height: 24px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.sidebar-brand h3 { color: #0f172a; font-size: 1rem; font-weight: 700; text-align: center; margin: 0; letter-spacing: -0.01em; }
-.sidebar-brand p  { color: #475569; font-size: 0.72rem; text-align: center; margin: 4px 0 0; font-weight: 500; }
+/* Anthropic radial spike-mark, rendered flat — no gradient, no glow. */
+.sidebar-brand .brand-mark {
+    width: 40px; height: 40px;
+    background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto var(--s-sm);
+}
+.sidebar-brand .brand-mark svg {
+    width: 26px; height: 26px;
+    stroke: var(--primary); fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+}
+.sidebar-brand h3 {
+    font-family: var(--font-display);
+    color: var(--on-dark); font-size: 22px; font-weight: 400;
+    text-align: center; margin: 0; letter-spacing: -0.3px;
+}
+.sidebar-brand p {
+    font-family: var(--font-body);
+    color: var(--on-dark-soft); font-size: 13px; text-align: center;
+    margin: 4px 0 0; font-weight: 400;
+}
 
 .sidebar-status {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 1px solid #e2e8f0; border-radius: 14px;
-    padding: 14px 16px; margin-top: 14px;
+    background: var(--surface-dark-elevated);
+    border: none; border-radius: var(--r-lg);
+    padding: var(--s-md); margin-top: var(--s-md);
 }
-.sidebar-status .status-live { display: flex; align-items: center; gap: 8px; color: #0f172a; font-size: 0.8rem; font-weight: 600; margin-bottom: 8px; }
-.sidebar-status .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); animation: blink 2s infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.5} }
-.sidebar-status .stat-row { color: #334155; font-size: 0.77rem; margin-top: 4px; font-weight: 500; }
-.sidebar-status .delta-pills { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-.sidebar-status .dpill { padding: 4px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; display:inline-flex; align-items:center; gap:4px; }
-.sidebar-status .dpill.green { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
-.sidebar-status .dpill.red   { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
-.sidebar-status .dpill.yel   { background: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+.sidebar-status .status-live {
+    display: flex; align-items: center; gap: var(--s-xs);
+    color: var(--on-dark); font-size: 14px; font-weight: 500; margin-bottom: var(--s-xs);
+}
+.sidebar-status .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+}
+.sidebar-status .stat-row {
+    color: var(--on-dark-soft); font-size: 13px; margin-top: var(--s-xxs); font-weight: 400;
+}
+.sidebar-status .delta-pills { display: flex; gap: var(--s-xxs); margin-top: var(--s-sm); flex-wrap: wrap; }
+.sidebar-status .dpill {
+    font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: var(--r-pill);
+    background: var(--surface-dark-soft); color: var(--on-dark-soft);
+}
+.sidebar-status .dpill.green { color: var(--success); }
+.sidebar-status .dpill.red   { color: var(--error); }
+.sidebar-status .dpill.yel   { color: var(--accent-amber); }
+
+.nav-label {
+    color: var(--on-dark-soft); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: var(--s-xs);
+}
 
 /* ── Sidebar navigation (styled st.radio, circle hidden) ─────────────── */
-.nav-label {
-    font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
-    color: #94a3b8; margin: 2px 2px 6px;
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 2px !important; }
+[data-testid="stSidebar"] [role="radiogroup"] > label {
+    padding: 10px var(--s-sm) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--on-dark-soft) !important;
+    font-size: 14px !important; font-weight: 500 !important;
+    cursor: pointer;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] { gap: 3px !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label {
-    background: transparent; border: 1px solid transparent; border-radius: 10px !important;
-    padding: 9px 12px !important; margin: 0 !important; width: 100%;
-    transition: background 0.15s, border-color 0.15s;
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: #f8fafc; }
-[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: #eff6ff !important; border-color: #dbeafe !important;
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child { display: none; }
-[data-testid="stSidebar"] div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
-    font-size: 0.86rem !important; font-weight: 600 !important; color: #334155 !important;
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
-    color: #2563eb !important; font-weight: 700 !important;
-}
-/* Room-count toggle reuses the same radio, laid out horizontally */
-[data-testid="stSidebar"] div[role="radiogroup"][aria-orientation="horizontal"] label {
-    text-align: center; justify-content: center;
+[data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child { display: none !important; }
+[data-testid="stSidebar"] [role="radiogroup"] > label[data-checked="true"],
+[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+    background: var(--surface-dark-elevated) !important;
+    color: var(--on-dark) !important;
 }
 
-/* ── Compact top bar (replaces the old full-width run-status banner) ── */
-.topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
-.status-pill {
-    display: inline-flex; align-items: center; gap: 7px; font-size: 0.78rem; font-weight: 700;
-    padding: 7px 14px; border-radius: 999px; white-space: nowrap;
+/* Room-count toggle reuses the same radio, laid out horizontally */
+[data-testid="stSidebar"] [role="radiogroup"].horizontal { flex-direction: row !important; }
+
+/* ── Compact top bar ──────────────────────────────────── */
+.topbar {
+    display: flex; align-items: center; justify-content: flex-start;
+    gap: var(--s-sm); padding: var(--s-sm) 0 0;
 }
-.status-pill.ok   { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
-.status-pill.warn { background: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
-.status-pill.err  { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
+.status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-body);
+    font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 4px 12px; border-radius: var(--r-pill);
+    background: var(--surface-card); color: var(--ink);
+}
+.status-pill.ok   { background: var(--surface-card);   color: var(--ink); }
+.status-pill.warn { background: var(--surface-cream-strong); color: var(--body-strong); }
+.status-pill.err  { background: var(--primary);        color: var(--on-primary); }
 
 /* ── Page header ─────────────────────────────────────── */
-.page-header {
-    padding: 2px 0 6px; margin-bottom: 6px;
-    border-bottom: 1px solid #e2e8f0;
-    text-align: right; direction: rtl;
-}
+.page-header { padding: var(--s-xl) 0 var(--s-lg); }
 .page-header .eyebrow {
-    display: inline-flex; align-items: center; gap: 6px;
-    color: #2563eb; font-size: 0.7rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 2px;
-    background: #eff6ff; padding: 5px 11px; border-radius: 999px; border: 1px solid #dbeafe;
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: var(--s-sm);
 }
+/* Display headline: serif, weight 400, negative tracking. Never bold. */
 .page-header h1 {
-    color: #0f172a; font-size: 1.6rem; font-weight: 800;
-    letter-spacing: -0.035em; margin: 0 0 2px; line-height: 1.1;
-    background: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    font-family: var(--font-display);
+    color: var(--ink); font-size: 48px; font-weight: 400;
+    line-height: 1.1; letter-spacing: -1px; margin: 0;
 }
-.page-header .sub { color: #334155; font-size: 0.82rem; font-weight: 500; }
-.page-header .sub b { color: #0f172a; font-weight: 700; }
+.page-header .sub {
+    font-family: var(--font-body);
+    color: var(--body); font-size: 16px; font-weight: 400;
+    line-height: 1.55; margin-top: var(--s-sm);
+}
+.page-header .sub b { color: var(--body-strong); font-weight: 500; }
 
 /* ── KPI strip ───────────────────────────────────────── */
-.kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 14px; }
+.kpi-strip { display: flex; gap: var(--s-sm); flex-wrap: wrap; }
 .kpi {
-    background: #ffffff; border-radius: 18px;
-    padding: 16px 18px 14px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
-    transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
-    display: flex; flex-direction: column;
-    min-height: 148px;
+    flex: 1 1 180px; min-height: 132px;
+    background: var(--surface-card);
+    border: none; border-radius: var(--r-lg);
+    padding: var(--s-lg);
+    display: flex; flex-direction: column; justify-content: space-between;
 }
-.kpi:hover { box-shadow: 0 10px 24px rgba(15,23,42,0.07); transform: translateY(-2px); border-color: #cbd5e1; }
-.kpi-head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 10px;
-}
+.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-xs); }
 .kpi-label {
-    color: #475569; font-size: 0.86rem; font-weight: 700;
-    letter-spacing: 0;
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 1.5px;
 }
 .kpi-icon {
-    width: 34px; height: 34px; border-radius: 10px;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 1rem;
+    width: 32px; height: 32px; border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; background: var(--canvas); color: var(--ink);
 }
-.kpi.blue   .kpi-icon { background: #dbeafe; }
-.kpi.green  .kpi-icon { background: #d1fae5; }
-.kpi.gray   .kpi-icon { background: #f1f5f9; }
-.kpi.orange .kpi-icon { background: #ffedd5; }
-.kpi.purple .kpi-icon { background: #ede9fe; }
+/* Accent variants stay inside the documented palette — no purple, no cool blue.
+   Coral is reserved for the primary metric only, so it stays scarce. */
+.kpi.blue   .kpi-icon { background: var(--primary); color: var(--on-primary); }
+.kpi.green  .kpi-icon { background: var(--canvas); color: var(--success); }
+.kpi.gray   .kpi-icon { background: var(--canvas); color: var(--muted); }
+.kpi.orange .kpi-icon { background: var(--canvas); color: var(--accent-amber); }
+.kpi.purple .kpi-icon { background: var(--canvas); color: var(--accent-teal); }
+/* Big numerics use the serif display face — the system sets prices in
+   Copernicus, and these KPIs are the same editorial gesture. */
 .kpi-value {
-    font-size: 1.7rem; font-weight: 800;
-    color: #0f172a; letter-spacing: -0.025em;
-    line-height: 1.1;
+    font-family: var(--font-display);
+    color: var(--ink); font-size: 36px; font-weight: 400;
+    line-height: 1.15; letter-spacing: -0.5px; margin-top: var(--s-xs);
 }
 .kpi-sub {
-    color: #94a3b8; font-size: 0.74rem; font-weight: 500;
-    margin-top: 4px;
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 13px; font-weight: 400; margin-top: 2px;
 }
 .kpi-delta {
     display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: 999px;
-    font-size: 0.72rem; font-weight: 700;
-    margin-top: auto; width: fit-content;
-    padding-top: 3px;
+    font-size: 13px; font-weight: 500; margin-top: var(--s-xs);
 }
-.kpi-delta.up   { background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
-.kpi-delta.down { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
-.kpi-delta.flat { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
-.kpi-spacer { margin-top: auto; }
+.kpi-delta.up   { color: var(--success); }
+.kpi-delta.down { color: var(--error); }
+.kpi-delta.flat { color: var(--muted-soft); }
+.kpi-spacer { flex: 1 1 180px; }
 
 /* ── Section labels ──────────────────────────────────── */
 .section-label {
-    color: #1e293b; font-size: 0.76rem; font-weight: 800;
-    text-transform: uppercase; letter-spacing: 0.14em;
-    margin: 12px 0 4px; display: flex; align-items: center; gap: 14px;
-    direction: rtl;
+    display: flex; align-items: center; gap: var(--s-sm);
+    margin: var(--s-xl) 0 var(--s-md);
 }
-.section-title, .section-desc { direction: rtl; text-align: right; }
-.run-status, .filter-hint, .info-notice { direction: rtl; text-align: right; }
-.kpi, .delta-tile, .card { direction: rtl; text-align: right; }
-.section-label::before {
-    content: ''; width: 4px; height: 14px; background: linear-gradient(180deg, #2563eb, #06b6d4);
-    border-radius: 4px;
+.section-label::before,
+.section-label::after { content: none; }
+.section-title {
+    font-family: var(--font-display);
+    color: var(--ink); font-size: 28px; font-weight: 400;
+    line-height: 1.2; letter-spacing: -0.3px;
 }
-.section-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, #e2e8f0, transparent); }
-.section-title { color: #0f172a; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.025em; margin: 0 0 2px; }
-.section-desc { color: #334155; font-size: 0.85rem; margin: 0 0 6px; font-weight: 500; }
+.section-desc {
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 14px; font-weight: 400;
+}
 
 /* ── Cards ───────────────────────────────────────────── */
+/* Chart cards follow the model-comparison-card pattern: canvas fill + hairline.
+   Data ink should dominate, so the card recedes rather than tinting the plot. */
 .card {
-    background: #ffffff; border-radius: 18px;
-    padding: 12px 6px 8px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
-    height: 100%; transition: box-shadow 0.2s, border-color 0.2s;
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    padding: var(--s-lg);
+    margin-bottom: var(--s-sm);
 }
-.card:hover { box-shadow: 0 8px 20px rgba(15,23,42,0.06); border-color: #cbd5e1; }
 .card-title {
-    color: #0f172a; font-size: 0.95rem; font-weight: 700;
-    letter-spacing: -0.015em;
-    display: inline; margin: 0 12px 0 0;
+    font-family: var(--font-body);
+    color: var(--ink); font-size: 18px; font-weight: 500;
+    line-height: 1.4; display: flex; align-items: center; gap: 6px;
 }
 .card-desc {
-    color: #64748b; font-size: 0.78rem; font-weight: 500;
-    display: inline; margin: 0;
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 14px; font-weight: 400;
+    line-height: 1.55; margin-top: var(--s-xxs);
 }
-.card-desc::before { content: "· "; margin: 0 6px; color: #cbd5e1; }
-.card > .card-desc + * { display: block; margin-top: 8px; }
+.card-desc::before { content: none; }
+.card > .card-desc + * { margin-top: var(--s-md); }
 
 /* ── Delta tiles ─────────────────────────────────────── */
-.delta-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 12px; }
+.delta-row { display: flex; gap: var(--s-sm); flex-wrap: wrap; }
 .delta-tile {
-    background: #ffffff; border-radius: 16px; padding: 12px 16px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
-    transition: transform 0.2s, box-shadow 0.2s;
+    flex: 1 1 150px;
+    background: var(--surface-card);
+    border: none; border-radius: var(--r-lg);
+    padding: var(--s-md) var(--s-lg);
 }
-.delta-tile:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(15,23,42,0.06); }
-.delta-tile .d-label { color: #1e293b; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 4px; }
-.delta-tile .d-value { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1; }
-.delta-tile .d-value.green  { background: linear-gradient(135deg, #059669, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.delta-tile .d-value.red    { background: linear-gradient(135deg, #dc2626, #ef4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.delta-tile .d-value.orange { background: linear-gradient(135deg, #d97706, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.delta-tile .d-value.blue   { background: linear-gradient(135deg, #2563eb, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.delta-tile .d-sub { color: #475569; font-size: 0.74rem; margin-top: 3px; font-weight: 500; }
+.delta-tile .d-label {
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 1.5px;
+}
+/* Flat colour, no gradient text-fill — the system is colour-block first. */
+.delta-tile .d-value {
+    font-family: var(--font-display);
+    font-size: 28px; font-weight: 400; letter-spacing: -0.3px;
+    line-height: 1.2; margin-top: var(--s-xxs);
+    color: var(--ink);
+    background: none; -webkit-text-fill-color: currentColor;
+}
+.delta-tile .d-value.green  { color: var(--success); }
+.delta-tile .d-value.red    { color: var(--error); }
+.delta-tile .d-value.orange { color: var(--accent-amber); }
+.delta-tile .d-value.blue   { color: var(--primary); }
+.delta-tile .d-sub {
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 13px; margin-top: 2px;
+}
 
 /* ── Notices ─────────────────────────────────────────── */
 .info-notice {
-    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px;
-    padding: 12px 16px; color: #1d4ed8; font-size: 0.84rem; font-weight: 500;
-    margin-bottom: 16px;
+    background: var(--surface-card);
+    border: none; border-radius: var(--r-lg);
+    padding: var(--s-md) var(--s-lg);
+    color: var(--body); font-size: 14px; line-height: 1.55;
 }
-
-/* ── Run status banner ───────────────────────────────── */
 .run-status {
-    display: flex; align-items: center; gap: 14px;
-    padding: 8px 14px; border-radius: 14px;
-    margin-bottom: 8px; font-size: 0.88rem; font-weight: 500;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+    display: flex; align-items: center; gap: var(--s-sm);
+    border-radius: var(--r-lg); padding: var(--s-md) var(--s-lg);
+    font-size: 14px; line-height: 1.55;
+    background: var(--surface-card); color: var(--body-strong);
+    margin-bottom: var(--s-sm);
 }
-.run-status .icon { font-size: 1.4rem; line-height: 1; }
-.run-status b { font-weight: 700; }
-.run-status .meta { margin-right: auto; opacity: 0.7; font-size: 0.8rem; }
-.run-status.ok   { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 1px solid #a7f3d0; color: #065f46; }
-.run-status.err  { background: linear-gradient(135deg, #fef2f2, #fee2e2); border: 1px solid #fecaca; color: #991b1b; }
-.run-status.warn { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fde68a; color: #92400e; }
-.filter-hint  {
-    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-    padding: 6px 12px; color: #334155; font-size: 0.76rem; margin-top: 4px; font-weight: 500;
+.run-status .icon { font-size: 16px; }
+.run-status b { font-weight: 500; color: var(--ink); }
+.run-status .meta { color: var(--muted); font-size: 13px; }
+.run-status.ok   { background: var(--surface-card); color: var(--body-strong); }
+.run-status.warn { background: var(--surface-cream-strong); color: var(--body-strong); }
+/* The coral callout is the system's voltage — reserved for the one state that
+   genuinely demands attention. */
+.run-status.err  { background: var(--primary); color: var(--on-primary); }
+.run-status.err b, .run-status.err .meta { color: var(--on-primary); }
+.filter-hint {
+    font-family: var(--font-body);
+    color: var(--muted); font-size: 13px; margin-bottom: var(--s-xs);
 }
+.filter-hint b { color: var(--ink); font-weight: 500; }
 
 /* ── Change tables ───────────────────────────────────── */
-.chg-tbl { width:100%; border-collapse:collapse; font-size:0.85rem; direction:rtl; }
-.chg-tbl th { background:#f8fafc; color:#64748b; font-weight:700; font-size:0.65rem; text-transform:uppercase; letter-spacing:0.12em; padding:13px 16px; text-align:right; border-bottom:1px solid #e2e8f0; }
-.chg-tbl td { padding:12px 16px; color:#0f172a; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
-.chg-tbl tr:hover td { background:#f8fafc; }
-.chg-tbl tr:last-child td { border-bottom:none; }
-.up   { color:#dc2626; font-weight:700; }
-.down { color:#059669; font-weight:700; }
-.open-btn {
-    display:inline-block; padding:6px 14px;
-    background:linear-gradient(135deg, #eff6ff, #dbeafe);
-    border:1px solid #bfdbfe; border-radius:8px;
-    color:#1d4ed8; text-decoration:none;
-    font-size:0.75rem; font-weight:700; white-space:nowrap; transition: all 0.15s;
+.chg-tbl { width: 100%; border-collapse: collapse; font-family: var(--font-body); }
+.chg-tbl th {
+    color: var(--muted); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    text-align: right; padding: var(--s-xs) var(--s-sm);
+    border-bottom: 1px solid var(--hairline);
 }
-.open-btn:hover { background:linear-gradient(135deg, #dbeafe, #bfdbfe); transform: translateY(-1px); }
+.chg-tbl td {
+    color: var(--body); font-size: 14px; padding: var(--s-sm);
+    border-bottom: 1px solid var(--hairline-soft);
+}
+.chg-tbl tr:last-child td { border-bottom: none; }
+.chg-tbl .up   { color: var(--success); font-weight: 500; }
+.chg-tbl .down { color: var(--error);   font-weight: 500; }
+.up   { color: var(--success); }
+.down { color: var(--error); }
+/* button-primary: coral, 8px radius, 40px tall, white label at 14/500. */
+.open-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--primary); color: var(--on-primary) !important;
+    font-family: var(--font-body); font-size: 14px; font-weight: 500;
+    padding: 12px 20px; border-radius: var(--r-md);
+    text-decoration: none; border: none;
+}
+.open-btn:active { background: var(--primary-active); }
 
 /* ── Sticky filter bar ───────────────────────────────── */
 .filter-bar-wrap {
-    position: sticky; top: 0; z-index: 99;
-    background: rgba(248,250,252,0.92);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 12px 14px 10px;
-    margin: 18px -4px 14px;
-    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
-}
-div[data-testid="stButton"] > button[kind="secondary"] {
-    background: linear-gradient(135deg, #f8fafc, #f1f5f9) !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 10px !important;
-    color: #475569 !important;
-    font-size: 0.78rem !important;
-    font-weight: 700 !important;
-    padding: 6px 14px !important;
-    height: 38px !important;
-    margin-top: 22px !important;
-    transition: all 0.15s !important;
-}
-div[data-testid="stButton"] > button[kind="secondary"]:hover {
-    background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
-    border-color: #bfdbfe !important;
-    color: #1d4ed8 !important;
-    transform: translateY(-1px);
+    position: sticky; top: 0; z-index: 50;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--hairline);
+    padding: var(--s-sm) 0;
+    margin-bottom: var(--s-md);
 }
 
-/* ── Help tooltip (ⓘ) ────────────────────────────────────── */
+/* ── Help tooltip (i) ────────────────────────────────────── */
 .tip {
-    position: relative;
     display: inline-flex; align-items: center; justify-content: center;
-    width: 18px; height: 18px;
-    margin-right: 6px;
-    border-radius: 50%;
-    background: #f1f5f9; color: #64748b;
-    font-size: 0.7rem; font-weight: 800;
-    cursor: help; user-select: none;
-    border: 1px solid #e2e8f0;
-    transition: all 0.15s;
-    vertical-align: middle;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--surface-card); color: var(--muted);
+    font-size: 11px; font-weight: 500; cursor: help;
+    position: relative; flex-shrink: 0;
 }
-.tip:hover { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
 .tip::after {
     content: attr(data-tip);
-    position: absolute; top: 130%; right: 50%;
-    transform: translateX(50%);
-    background: #0f172a; color: #f1f5f9;
-    padding: 8px 12px; border-radius: 8px;
-    font-size: 0.78rem; font-weight: 500;
-    white-space: normal; width: max-content; max-width: 280px;
-    text-align: right; direction: rtl;
-    line-height: 1.45;
-    box-shadow: 0 8px 20px rgba(15,23,42,0.18);
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.15s;
-    z-index: 1000;
+    position: absolute; top: calc(100% + 8px); right: 0;
+    width: 280px; padding: var(--s-sm) var(--s-md);
+    background: var(--surface-dark); color: var(--on-dark);
+    font-family: var(--font-body); font-size: 13px; font-weight: 400;
+    line-height: 1.55; text-align: right; border-radius: var(--r-md);
+    opacity: 0; visibility: hidden; z-index: 100; pointer-events: none;
 }
-.tip:hover::after { opacity: 1; }
+.tip:hover::after { opacity: 1; visibility: visible; }
 
 /* ── Streamlit widgets ───────────────────────────────── */
-[data-testid="stHorizontalBlock"] { gap: 16px; }
-div[data-testid="column"] { padding: 0 !important; }
-.stTabs [data-baseweb="tab-list"] { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; padding: 4px !important; gap: 2px !important; }
-.stTabs [data-baseweb="tab"] { background: transparent !important; border-radius: 9px !important; color: #334155 !important; font-size: 0.84rem !important; font-weight: 600 !important; padding: 7px 16px !important; border: none !important; transition: all 0.15s !important; }
-.stTabs [data-baseweb="tab"]:hover { color: #0f172a !important; background: #f8fafc !important; }
-.stTabs [aria-selected="true"] { background: linear-gradient(135deg, #2563eb, #06b6d4) !important; color: #ffffff !important; font-weight: 700 !important; box-shadow: 0 4px 10px rgba(37,99,235,0.25) !important; }
-.stTabs [data-baseweb="tab-panel"] { padding: 22px 0 0 !important; }
-
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.stTabs [data-baseweb="tab-list"] { gap: var(--s-xxs); border-bottom: 1px solid var(--hairline); }
+.stTabs [data-baseweb="tab"] {
+    font-family: var(--font-body); font-size: 14px; font-weight: 500;
+    color: var(--muted); padding: var(--s-xs) 14px;
+    border-radius: var(--r-md) var(--r-md) 0 0; background: transparent;
+}
+.stTabs [aria-selected="true"] { background: var(--surface-card); color: var(--ink); }
+.stTabs [data-baseweb="tab-panel"] { padding-top: var(--s-md); }
 
 /* ── Responsive ──────────────────────────────────────── */
-@media (max-width: 1200px) {
-    .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 1024px) {
+    .kpi { flex: 1 1 220px; }
 }
-@media (max-width: 820px) {
+@media (max-width: 768px) {
     .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
-    .kpi-strip  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .delta-row  { grid-template-columns: repeat(2, 1fr); }
-    .page-header h1 { font-size: 1.3rem; }
-    /* Stack side-by-side chart/column rows instead of letting them overflow */
-    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
-    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
-        flex: 1 1 100% !important; min-width: 100% !important;
-    }
+    .page-header h1 { font-size: 32px; letter-spacing: -0.5px; }
+    .section-title { font-size: 22px; }
+    .kpi { flex: 1 1 100%; }
+    .delta-tile { flex: 1 1 100%; }
 }
 @media (max-width: 480px) {
-    .kpi-strip { gap: 8px; }
-    .kpi { min-height: 124px; padding: 14px 14px 12px; }
-    .kpi-value { font-size: 1.4rem; }
+    .kpi-strip { gap: var(--s-xs); }
+    .kpi { min-height: 124px; padding: var(--s-md); }
+    .kpi-value { font-size: 28px; }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Theme colours ────────────────────────────────────────────────────────────────
-# Brand palette is a blue→cyan gradient. Time-series lines use the brand hues;
-# GREEN/RED are reserved *status* colours (new vs removed, up vs down) and are
-# only ever used alongside a label, never as a decorative series colour.
-CYAN   = "#2563eb"   # brand blue  — primary series
-CYAN2  = "#0891b2"   # brand cyan  — secondary series (validated for contrast)
-GREEN  = "#10b981"
-RED    = "#ef4444"
-YELLOW = "#f59e0b"
-PURPLE = "#7c3aed"
+# Anthropic palette. Coral is the single brand voltage and carries the primary
+# series; teal/amber are the documented sparing companions. GREEN/RED stay
+# reserved *status* colours (new vs removed, up vs down) and are only ever used
+# alongside a label, never as a decorative series colour.
+# Legacy CYAN*/PURPLE names are kept as aliases so call sites stay untouched.
+CORAL  = "#cc785c"   # primary series  (colors.primary)
+TEAL   = "#5db8a6"   # secondary series (colors.accent-teal)
+AMBER  = "#e8a55a"   # tertiary        (colors.accent-amber)
+GREEN  = "#5db872"   # status: added   (colors.success)
+RED    = "#c64545"   # status: removed (colors.error)
+CYAN   = CORAL
+CYAN2  = TEAL
+YELLOW = AMBER
+PURPLE = TEAL
 
 def _chart(fig, height=280):
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Heebo, -apple-system, sans-serif", color="#64748b", size=11),
+        font=dict(family="Assistant, Inter, -apple-system, sans-serif", color="#6c6a64", size=11),
         height=height,
         margin=dict(t=8, b=12, l=4, r=4),
         dragmode=False,
-        xaxis=dict(gridcolor="#f1f5f9", zerolinecolor="#f1f5f9",
-                   tickfont=dict(color="#94a3b8", size=11), showline=False,
+        xaxis=dict(gridcolor="#f5f0e8", zerolinecolor="#f5f0e8",
+                   tickfont=dict(color="#8e8b82", size=11), showline=False,
                    fixedrange=True),
-        yaxis=dict(gridcolor="#f1f5f9", zerolinecolor="#f1f5f9",
-                   tickfont=dict(color="#94a3b8", size=11), showline=False, fixedrange=True),
-        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", font=dict(color="#475569", size=11)),
-        hoverlabel=dict(bgcolor="#0f172a", bordercolor="#0f172a", font=dict(color="#f1f5f9", size=12, family="Inter, Heebo, sans-serif")),
+        yaxis=dict(gridcolor="#f5f0e8", zerolinecolor="#f5f0e8",
+                   tickfont=dict(color="#8e8b82", size=11), showline=False, fixedrange=True),
+        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)", font=dict(color="#3d3d3a", size=11)),
+        hoverlabel=dict(bgcolor="#141413", bordercolor="#141413", font=dict(color="#f5f0e8", size=12, family="Assistant, Inter, sans-serif")),
         showlegend=False,
     )
     return fig
 
+# Per-chart time filter: a slim native Plotly range slider under each
+# time-series chart. Paired with fixedrange=True on the main axis so dragging
+# the plot itself still does nothing (keeps click-to-drill-down working on the
+# bar charts) — the slider handles are the only way to zoom the date range.
+_RANGESLIDER = dict(visible=True, thickness=0.09, bgcolor="#f5f0e8",
+                     bordercolor="#e8e2d5", borderwidth=1)
+
+# One-click date-range buttons on every time chart (week / month / 3 months /
+# all). Client-side, so switching is instant with no Streamlit rerun; the
+# range slider under each chart stays for picking a custom window.
+_RANGE_BUTTONS = dict(
+    buttons=[dict(count=7,  step="day",   stepmode="backward", label="שבוע"),
+             dict(count=1,  step="month", stepmode="backward", label="חודש"),
+             dict(count=3,  step="month", stepmode="backward", label="3 חודשים"),
+             dict(step="all", label="הכל")],
+    x=0, y=1.02, xanchor="left", yanchor="bottom",
+    bgcolor="#f5f0e8", activecolor="#e8d5c4", bordercolor="#e8e2d5", borderwidth=1,
+    font=dict(size=12, color="#141413", family="Assistant, Inter, sans-serif"),
+)
+
+def _date_xaxis(tickformat="%d/%m/%y"):
+    return dict(type="date", fixedrange=True, tickformat=tickformat,
+                rangeslider=_RANGESLIDER, rangeselector=_RANGE_BUTTONS)
+
 def _daily(x, y, agg="last"):
-    """Collapse multiple same-day points into one string-labeled day (no duplicate ticks)."""
+    """Collapse multiple same-day points into one (no duplicate ticks). Returns
+    real Timestamps (not formatted strings) so the x-axis can stay type="date" —
+    needed for the per-chart range slider to filter by actual date, not category
+    position. Tick/hover text formatting (dd/mm/yy) happens in the layout instead."""
     tmp = pd.DataFrame({"x": pd.to_datetime(x).dt.normalize(), "y": pd.to_numeric(y, errors="coerce")}).dropna()
     if tmp.empty:
         return x, y
     res = tmp.groupby("x")["y"].last() if agg == "last" else tmp.groupby("x")["y"].mean().round()
-    return res.index.strftime("%d/%m/%y"), res.values
+    res = res[~_spikes(res)]
+    return res.index, res.values
+
+SPIKE_WINDOW  = 7      # days in the rolling-median window
+SPIKE_MADS    = 3.0    # how many (scaled) MADs off the local median counts as a spike
+SPIKE_MIN_REL = 0.08   # ...and at least this far off in relative terms
+
+def _spikes(s):
+    """Hampel filter: flag single-day points far off their neighbors' rolling
+    median — e.g. 2026-05-17's partial scrape (262 listings in a ~360 series).
+    Needs BOTH a robust-statistics outlier (> SPIKE_MADS scaled MADs) and a
+    material jump (> SPIKE_MIN_REL), so a flat series with a near-zero MAD
+    doesn't lose ordinary small wiggles. A sustained level change is not a
+    spike: the median follows it within half a window. The first and last
+    points are never flagged — with neighbors on one side only, a genuine new
+    level (e.g. today's run after an outage) is indistinguishable from a spike."""
+    if len(s) < 5:
+        return pd.Series(False, index=s.index)
+    med = s.rolling(SPIKE_WINDOW, center=True, min_periods=3).median()
+    mad = (s - med).abs().rolling(SPIKE_WINDOW, center=True, min_periods=3).median()
+    dev = (s - med).abs()
+    flags = (dev > SPIKE_MADS * 1.4826 * mad) & (dev > SPIKE_MIN_REL * med.abs())
+    flags.iloc[[0, -1]] = False
+    return flags
 
 def _sparse_labels(values, fmt):
     """Direct-label only the first, last, min and max points; blank the rest.
@@ -506,6 +653,40 @@ DATA_DIR  = os.path.dirname(os.path.abspath(__file__))
 # filters are required to agree).
 MIN_SANE_PRICE = {"sale": 500_000, "rent": 1_500}
 
+# ₪-per-m² sanity band, (min, max). An absolute price floor cannot separate a
+# junk listing from a real luxury one: ₪590,000/95 m² (₪6,211/m²) is data-entry
+# garbage while ₪21,000,000/600 m² (₪35,000/m²) is a genuine house, and no
+# single price threshold splits those. ₪/m² does. Sale's band is tight because
+# the data has a clean gap (junk <= 6,800/m², genuine >= 13,462/m²); rent's is
+# deliberately loose because monthly rent does not scale with area, so its low
+# ₪/m² entries are real large houses. Must match yad2_scraper.py's
+# SALE_CFG / RENT_CFG min_sane_ppsqm / max_sane_ppsqm.
+SANE_PPSQM = {"sale": (10_000, 100_000), "rent": (10, 500)}
+
+# Tukey fence multiplier for _iqr_outliers(), per deal type. Rent uses the
+# 'far out' fence: its feed is small (~110 apartments) and naturally wide, so
+# 1.5 hid 11 of 109 genuine listings — e.g. 2 of Neve Zemer's 7 four-room
+# rentals — while 3.0 drops only the 2 true extremes. Sale's large, tight feed
+# is fine at 1.5 (18 of 648).
+IQR_K = {"sale": 1.5, "rent": 3.0}
+IQR_MIN_GROUP = 8           # smaller room groups are too thin to estimate quartiles
+
+def _iqr_outliers(df, k=1.5):
+    """Boolean mask of rows whose price or ₪/m² falls outside the 1.5×IQR fences
+    of their room-count group (4, 4.5 -> 4; 5 -> 5). NaNs are never flagged."""
+    mask = pd.Series(False, index=df.index)
+    ppsqm = df["price_num"] / df["size_sqm"]
+    groups = df["rooms"].fillna(-1).floordiv(1)
+    for _, idx in df.groupby(groups).groups.items():
+        for s in (df.loc[idx, "price_num"], ppsqm.loc[idx]):
+            vals = s.dropna()
+            if len(vals) < IQR_MIN_GROUP:
+                continue
+            q1, q3 = vals.quantile([0.25, 0.75])
+            lo, hi = q1 - k * (q3 - q1), q3 + k * (q3 - q1)
+            mask.loc[idx] |= s.notna() & ((s < lo) | (s > hi))
+    return mask
+
 def deal_path(base_filename, deal_type):
     """Resolve a deal-type-specific data file path. base_filename is the sale
     filename (e.g. 'yad2_history.csv'); for deal_type == 'rent' this inserts
@@ -521,12 +702,10 @@ def parse_price_num(p):
     m = re.search(r"(\d+)", p)
     return int(m.group(1)) if m else None
 
-@st.cache_data
-def load_current(_mtime, deal_type):
-    data_file = deal_path("yad2_raanana_4rooms.json", deal_type)
-    with open(data_file, encoding="utf-8") as f:
-        raw = json.load(f)
-    df = pd.DataFrame(raw)
+def _clean_listings(df, deal_type):
+    """Every display-time filter, in one place, so the live snapshot and the
+    archived reference snapshot behind the KPI deltas are cleaned identically."""
+    df = df.copy()
     df["price_num"] = df["price"].apply(parse_price_num)
     for col in ["rooms", "floor", "size_sqm"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -538,18 +717,43 @@ def load_current(_mtime, deal_type):
     min_sane_price = MIN_SANE_PRICE.get(deal_type, 500_000)
     _price_ok = df["price_num"].isna() | (df["price_num"] >= min_sane_price)
     _size_ok  = df["size_sqm"].isna()  | ((df["size_sqm"] >= 25) & (df["size_sqm"] <= 1000))
-    df = df[_price_ok & _size_ok].reset_index(drop=True)
+    # ₪/m² band — only meaningful where both price and size are present, so
+    # rows missing either are kept (same policy as the two checks above).
+    lo_ppsqm, hi_ppsqm = SANE_PPSQM.get(deal_type, (10_000, 100_000))
+    _ppsqm = df["price_num"] / df["size_sqm"]
+    _ppsqm_ok = _ppsqm.isna() | ((_ppsqm >= lo_ppsqm) & (_ppsqm <= hi_ppsqm))
+    df = df[_price_ok & _size_ok & _ppsqm_ok].reset_index(drop=True)
     def exf(info, idx):
         parts = str(info).split(",")
         return parts[idx].strip() if len(parts) > idx else ""
     df["apt_type"]     = df["info"].apply(lambda x: exf(x, 0) or "דירה")
-    df["neighborhood"] = df["info"].apply(lambda x: exf(x, 1))
+    # Same rule as the scraper's extract_neighborhood(): the 2nd part is a
+    # neighborhood only in "type, neighborhood, city". In "type, city" it is the
+    # city, which used to surface as a fake "רעננה" neighborhood (39 sale + 3
+    # rent listings on 2026-10-23) in the filter and the DOM-by-area chart.
+    df["neighborhood"] = df["info"].apply(lambda x: exf(x, 1) if str(x).count(",") >= 2 else "")
 
     # Dashboard scope is apartments / garden apartments / duplexes only — drop
     # other Yad2 categories that leak into the search results (roof/penthouse,
     # private houses, land plots, purchase groups, semi-detached) so they don't
     # skew KPIs, charts or the table, and don't show up as filter options.
     df = df[df["apt_type"].isin(["דירה", "דירת גן", "דופלקס"])].reset_index(drop=True)
+
+    # Statistical outliers (Tukey fences: outside 1.5×IQR) on price and ₪/m²,
+    # computed per room count so a pricey 5-room isn't judged against 4-rooms.
+    # The sanity band above only catches data-entry typos; this also drops
+    # genuine-but-atypical listings (a 540 m² "4-room", a ₪2M 5-room) that
+    # would otherwise drag averages and stretch chart axes. Display-only, like
+    # the filters above — rows missing price or size are kept.
+    df = df[~_iqr_outliers(df, IQR_K.get(deal_type, 1.5))].reset_index(drop=True)
+    return df
+
+@st.cache_data
+def load_current(_mtime, deal_type):
+    data_file = deal_path("yad2_raanana_4rooms.json", deal_type)
+    with open(data_file, encoding="utf-8") as f:
+        raw = json.load(f)
+    df = _clean_listings(pd.DataFrame(raw), deal_type)
 
     fs_path = deal_path("yad2_first_seen.json", deal_type)
     try:
@@ -586,6 +790,114 @@ def load_current(_mtime, deal_type):
     df["ימים_בשוק"]   = df.apply(_calc_dom, axis=1)
     return df
 
+KPI_REF_DAYS = 7
+
+@st.cache_data(ttl=300)
+def load_reference_snapshot_latest(deal_type):
+    path = deal_path("yad2_listings_archive.csv", deal_type)
+    if not os.path.exists(path):
+        return pd.Timestamp.now()
+    ts = pd.to_datetime(pd.read_csv(path, encoding="utf-8-sig", usecols=["snapshot_time"])["snapshot_time"],
+                        errors="coerce")
+    return ts.max()
+
+@st.cache_data(ttl=300)
+def load_dom_panel(deal_type):
+    """Days-on-market of every listing in the last archived snapshot of each
+    day, cleaned exactly like the live view. DOM is shown as a MEDIAN: a few
+    listings that have sat on Yad2 for years (posted 2019, 2022 - confirmed on
+    the site) dragged the mean far from the typical listing; one of them alone
+    moved rent's 4-room average 39 -> 72 -> 30 as it appeared and left. The
+    scraper's history files only store means, so the series is rebuilt here
+    from the archive (which starts 2026-08-06). Posting dates come from the
+    current date_posted cache, which holds the verified/corrected dates."""
+    cols = ["date", "rooms", "neighborhood", "apt_type", "dom"]
+    path = deal_path("yad2_listings_archive.csv", deal_type)
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=cols)
+    ar = pd.read_csv(path, encoding="utf-8-sig", dtype=str)
+    ar["_ts"] = pd.to_datetime(ar["snapshot_time"], errors="coerce")
+    ar = ar.dropna(subset=["_ts"])
+    ar["_day"] = ar["_ts"].dt.normalize()
+    ar = ar[ar["_ts"] == ar.groupby("_day")["_ts"].transform("max")]
+    def _json(name):
+        try:
+            with open(deal_path(name, deal_type), encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    dp, fs = _json("yad2_date_posted.json"), _json("yad2_first_seen.json")
+    parts = []
+    for day, snap in ar.groupby("_day"):
+        snap = snap.drop(columns=["_ts", "_day", "snapshot_time"])
+        snap["_lid"] = snap["url"].fillna("").str.split("?").str[0].str.rstrip("/").str.split("/").str[-1]
+        snap = snap[snap["_lid"] != ""].drop_duplicates("_lid")
+        c = _clean_listings(snap, deal_type)
+        posted = (c["_lid"].map(dp).fillna(c["date_posted"]).replace("", np.nan)
+                  .fillna(c["_lid"].map(fs)))
+        dom = (day - pd.to_datetime(posted, errors="coerce")).dt.days
+        parts.append(pd.DataFrame({"date": day, "rooms": c["rooms"].values,
+                                   "neighborhood": c["neighborhood"].values,
+                                   "apt_type": c["apt_type"].values, "dom": dom.values}))
+    if not parts:
+        return pd.DataFrame(columns=cols)
+    out = pd.concat(parts, ignore_index=True)
+    return out[out["dom"] >= 0]
+
+def _rooms_bucket(df, rooms_sel):
+    return df[df["rooms"] >= 5] if rooms_sel == "5" else df[(df["rooms"] >= 4) & (df["rooms"] < 5)]
+
+@st.cache_data(ttl=300)
+def load_reference_snapshot(deal_type, days=KPI_REF_DAYS):
+    """The archived snapshot from ~`days` ago, run through _clean_listings(),
+    as the baseline for the KPI deltas. Returns (df, snapshot_time) or
+    (None, None). The scraper's history files can't serve as that baseline:
+    their stats include houses/penthouses and skip the outlier filter, so
+    comparing them to the cleaned KPIs reported a fake -5.7% avg-price move."""
+    path = deal_path("yad2_listings_archive.csv", deal_type)
+    if not os.path.exists(path):
+        return None, None
+    ar = pd.read_csv(path, encoding="utf-8-sig", dtype=str)
+    ar["_ts"] = pd.to_datetime(ar["snapshot_time"], errors="coerce")
+    # Measured back from the latest snapshot, not from now: if the scraper is
+    # paused, "7 days before now" can be the current snapshot itself and every
+    # KPI then reads 0.0% against its own data.
+    latest = ar["_ts"].max()
+    past = ar.loc[ar["_ts"] <= latest - pd.Timedelta(days=days), "_ts"]
+    if past.empty:
+        return None, None
+    snap_ts = past.max()
+    snap = ar[ar["_ts"] == snap_ts].drop(columns=["_ts", "snapshot_time"])
+    snap = snap.assign(_lid=snap["url"].fillna("").str.split("?").str[0].str.rstrip("/").str.split("/").str[-1])
+    snap = snap[snap["_lid"] != ""].drop_duplicates("_lid")
+    return _clean_listings(snap, deal_type), snap_ts
+
+# History points recorded before a scraper methodology change aren't comparable
+# with what came after, so they're blanked (NaN) on load and drop out of every
+# time-series chart. Each cutoff is the first run on the new method:
+#  - count / avg_active_dom, 2026-05-03: the first week's counts swing 535 ->
+#    460 -> 370 as booster-duplicate removal was introduced, and DOM was still
+#    bootstrapping from an empty first_seen map (119 -> 183 -> ~155).
+#  - avg_price_per_sqm, 2026-07-12: ₪/m² drops 9% overnight (30,750 -> 28,020)
+#    while avg price and count stay flat — a size-parsing fix, not the market.
+# Rent tracking began after both changes, so it has no cutoffs.
+HISTORY_RELIABLE_FROM = {
+    "sale": {"count": "2026-05-03", "avg_active_dom": "2026-05-03",
+             "avg_price_per_sqm": "2026-07-12"},
+    "rent": {},
+}
+
+# Success-run gap (days) that makes the next run a catch-up, see the new/removed
+# charts. 3-6 day gaps (PC off over a weekend) yield normal-sized bars; only
+# week-plus outages (15d, 8d, 17d) produced the distorted ones.
+CATCHUP_GAP_DAYS = 7
+
+def _mask_unreliable(df, deal_type):
+    for col, since in HISTORY_RELIABLE_FROM.get(deal_type, {}).items():
+        if col in df.columns:
+            df[col] = df[col].astype(float).where(df["date"] >= since)
+    return df
+
 @st.cache_data(ttl=300)
 def load_history(deal_type):
     path = deal_path("yad2_history.csv", deal_type)
@@ -593,6 +905,7 @@ def load_history(deal_type):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
     df["date"] = pd.to_datetime(df["timestamp"])
+    df = _mask_unreliable(df, deal_type)
     df = df.rename(columns={"count": "כמות"})
     return df.sort_values("date").reset_index(drop=True)
 
@@ -608,7 +921,7 @@ def load_nb_history(deal_type):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
     df["date"] = pd.to_datetime(df["timestamp"])
-    return _norm_rooms(df).sort_values("date").reset_index(drop=True)
+    return _norm_rooms(_mask_unreliable(df, deal_type)).sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
 def load_type_history(deal_type):
@@ -617,7 +930,7 @@ def load_type_history(deal_type):
         return pd.DataFrame()
     df = pd.read_csv(path, encoding="utf-8-sig")
     df["date"] = pd.to_datetime(df["timestamp"])
-    return _norm_rooms(df).sort_values("date").reset_index(drop=True)
+    return _norm_rooms(_mask_unreliable(df, deal_type)).sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
 def load_rooms_history(deal_type):
@@ -627,6 +940,7 @@ def load_rooms_history(deal_type):
     df = pd.read_csv(path, encoding="utf-8-sig")
     df["date"]  = pd.to_datetime(df["timestamp"])
     df["rooms"] = df["rooms"].astype(str).str.replace(r"\.0$", "", regex=True)
+    df = _mask_unreliable(df, deal_type)
     return df.sort_values("date").reset_index(drop=True)
 
 @st.cache_data(ttl=300)
@@ -707,7 +1021,7 @@ def build_trends_payload(cur_df, nbh, rooms_sel, deal_type):
     if len(h) == 0:
         return None
     h["day"] = h["timestamp"].astype(str).str[:10]
-    h["dom_num"] = pd.to_numeric(h["avg_active_dom"], errors="coerce")
+    panel = _rooms_bucket(load_dom_panel(deal_type), rooms_sel)
 
     if rooms_sel == "5":
         cur = cur_df[cur_df["rooms"] >= 5]
@@ -718,7 +1032,8 @@ def build_trends_payload(cur_df, nbh, rooms_sel, deal_type):
     cur = cur[~cur["neighborhood"].isin(["", "רעננה"])]
 
     today_str = datetime.now().strftime("%Y-%m-%d")
-    all_days = sorted(set(h["day"]))
+    # Days with a usable count only, so "days" stays aligned with market_count
+    all_days = sorted(set(h.loc[h["count"].notna(), "day"]))
     out = []
     for name, grp in cur.groupby("neighborhood"):
         count = int(len(grp))
@@ -726,13 +1041,15 @@ def build_trends_payload(cur_df, nbh, rooms_sel, deal_type):
             continue                      # tiny samples are noise
         doms = grp["ימים_בשוק"].dropna()
         doms = doms[doms >= 0]
-        dom = round(float(doms.mean()), 1) if len(doms) else None
+        dom = round(float(doms.median()), 1) if len(doms) else None
         pp = grp[(grp["size_sqm"] > 0) & grp["price_num"].notna()]
         ppsqm = int((pp["price_num"] / pp["size_sqm"]).mean()) if len(pp) else None
 
         hh = h[h["neighborhood"] == name].sort_values("date")
-        day_count = hh.groupby("day")["count"].last()
-        day_dom   = hh.groupby("day")["dom_num"].mean().dropna()
+        # .dropna(): HISTORY_RELIABLE_FROM blanks pre-cutoff counts
+        day_count = hh.groupby("day")["count"].last().dropna()
+        pn = panel[panel["neighborhood"] == name]
+        day_dom   = pn.groupby(pn["date"].dt.strftime("%Y-%m-%d"))["dom"].median().dropna()
         cser = [int(v) for v in day_count.values]
         dser = [round(float(v), 1) for v in day_dom.values]
         # The snapshot is the truth for "now": replace/append today's point so
@@ -754,12 +1071,9 @@ def build_trends_payload(cur_df, nbh, rooms_sel, deal_type):
         return None
     out.sort(key=lambda x: -x["count"])
 
-    # Market-wide series: inventory-weighted DOM + total count per day
-    hv = h.dropna(subset=["dom_num"])
-    wsum = (hv["dom_num"] * hv["count"]).groupby(hv["day"]).sum()
-    csum = hv.groupby("day")["count"].sum()
-    mdom = (wsum / csum).round(1)
-    mcount = h.groupby("day")["count"].sum()
+    # Market-wide series: median DOM across all listings + total count per day
+    mdom = panel.groupby(panel["date"].dt.strftime("%Y-%m-%d"))["dom"].median().round(1)
+    mcount = h.dropna(subset=["count"]).groupby("day")["count"].sum()
     mc = [int(v) for v in mcount.values]
     total_now = sum(x["count"] for x in out)
     if len(mc) and mcount.index[-1] == today_str: mc[-1] = total_now
@@ -768,9 +1082,10 @@ def build_trends_payload(cur_df, nbh, rooms_sel, deal_type):
         if all_days and all_days[-1] != today_str: all_days.append(today_str)
     mdom_days = list(mdom.index)
     mdom_vals = [float(v) for v in mdom.values]
-    cur_doms = [(x["dom"], x["count"]) for x in out if x["dom"] is not None]
-    if cur_doms:
-        wd = round(sum(d * c for d, c in cur_doms) / sum(c for _, c in cur_doms), 1)
+    _live = cur["ימים_בשוק"].dropna()
+    _live = _live[_live >= 0]
+    if len(_live):
+        wd = round(float(_live.median()), 1)
         if mdom_days and mdom_days[-1] == today_str: mdom_vals[-1] = wd
         else: mdom_days.append(today_str); mdom_vals.append(wd)
     deal_label = "מכירה" if deal_type == "sale" else "השכרה"
@@ -848,6 +1163,11 @@ nbs         = [n for n in _by_rarity(df["neighborhood"]) if n]
 price_min, price_max = int(df["price_num"].min()), int(df["price_num"].max())
 size_min, size_max   = int(df["size_sqm"].dropna().min()), int(df["size_sqm"].dropna().max())
 
+# Time-range options for the top filter bar. None = no cutoff ("all").
+# 90 days matters here: the history reaches back to 2026-04-24, so 7/30 alone
+# hid most of the record.
+RANGE_OPTIONS = {"הכל": None, "90 ימים": 90, "30 ימים": 30, "7 ימים": 7}
+
 # Defaults for reset
 _defaults = {
     "flt_type":   "הכל",
@@ -905,7 +1225,7 @@ with st.sidebar:
         _lr_ok = str(run_log.iloc[0].get("status", "")).lower() != "error"
         st.markdown(f"""
         <div class="sidebar-status">
-            <div class="status-live"><span class="live-dot" style="background:{'#10b981' if _lr_ok else '#ef4444'}"></span>
+            <div class="status-live"><span class="live-dot" style="background:{'#5db872' if _lr_ok else '#c64545'}"></span>
                 {'נתונים חיים' if _lr_ok else 'שגיאה בריצה האחרונה'}</div>
             <div class="stat-row">עודכן {mod_age}</div>
         </div>
@@ -943,7 +1263,12 @@ header_slot = st.empty()
 # two pages).
 if page in ("overview", "listings"):
     st.markdown('<div class="filter-bar-wrap"><div class="filter-bar-anchor"></div>', unsafe_allow_html=True)
-    fb3, fb4, fb5, fb_reset, _spacer = st.columns([0.9, 0.9, 1, 0.7, 3.6])
+    fb_time, fb3, fb4, fb5, fb_reset, _spacer = st.columns([1, 0.9, 0.9, 1, 0.7, 2.6])
+    with fb_time:
+        # Time range for every history-backed chart. The filtering machinery
+        # (_within_range / range_days) already existed but had no widget —
+        # quick_range was hardcoded to "הכל", so it never did anything.
+        st.selectbox("טווח זמן", list(RANGE_OPTIONS), key="quick_range")
     with fb3:
         sel_type = st.selectbox("סוג נכס", ["הכל"] + apt_types, key="flt_type")
     with fb4:
@@ -1057,7 +1382,8 @@ if page == "overview":
     # ── KPI strip ──────────────────────────────────────────────────────────────
     def fmt(n): return f"₪{n:,}" if n else "—"
 
-    # Compute deltas vs ~7 days ago from market-wide history (best signal we have)
+    # Deltas vs the archived snapshot from ~7 days ago, cleaned and filtered
+    # exactly like the live KPIs (see load_reference_snapshot).
     def _kpi_delta(curr, ref):
         """Return (html_pill, sub_text). For lower-is-better KPIs flip with `invert`."""
         if curr is None or ref is None or ref == 0:
@@ -1070,20 +1396,28 @@ if page == "overview":
             cls, arrow = "up", "▲"
         else:
             cls, arrow = "down", "▼"
-        return f'<div class="kpi-delta {cls}">{arrow} {abs(pct):.1f}% מול שבוע</div>'
+        return f'<div class="kpi-delta {cls}">{arrow} {abs(pct):.1f}% {ref_label}</div>'
 
     ref_count = ref_avg = ref_med = ref_pps = None
-    # Baseline = the SAME room-count bucket ~7 days ago (rooms_history), so the KPI —
-    # which now always reflects one room count (4 or 5) — compares like-for-like.
-    _rh = rooms_hist[rooms_hist["rooms"] == sel_rooms] if len(rooms_hist) else rooms_hist
-    if len(_rh) > 0:
-        cutoff = pd.Timestamp.now() - pd.Timedelta(days=7)
-        past = _rh[_rh["date"] <= cutoff]
-        ref_row = past.iloc[-1] if len(past) else _rh.iloc[0]
-        ref_count = int(ref_row["count"])               if pd.notna(ref_row.get("count"))             else None
-        ref_avg   = float(ref_row["avg_price"])         if pd.notna(ref_row.get("avg_price"))          else None
-        ref_med   = float(ref_row["median_price"])      if pd.notna(ref_row.get("median_price"))       else None
-        ref_pps   = float(ref_row["avg_price_per_sqm"]) if pd.notna(ref_row.get("avg_price_per_sqm"))  else None
+    ref_label = "מול שבוע"
+    # Baseline = the same room-count bucket in the archived snapshot ~7 days ago,
+    # so the KPI (always one room count, 4 or 5) compares like-for-like.
+    ref_df, ref_ts = load_reference_snapshot(sel_deal)
+    if ref_df is not None:
+        _rm = ref_df["rooms"]
+        ref = ref_df[_rm >= 5] if sel_rooms == "5" else ref_df[(_rm >= 4) & (_rm < 5)]
+        ref = ref[ref["price_num"].notna()]
+        if len(ref):
+            ref_count = len(ref)
+            ref_avg   = float(ref["price_num"].mean())
+            ref_med   = float(ref["price_num"].median())
+            _rp       = ref[ref["size_sqm"] > 0]
+            ref_pps   = float((_rp["price_num"] / _rp["size_sqm"]).mean()) if len(_rp) else None
+        # After an outage the newest snapshot >= 7 days old can be much older —
+        # say so rather than claim a week.
+        _age_days = (load_reference_snapshot_latest(sel_deal) - ref_ts).days
+        if _age_days > KPI_REF_DAYS + 1:
+            ref_label = f"מול לפני {_age_days} ימים"
 
     # The room-count baseline above is valid for the plain 4/5 view. But if a FURTHER
     # filter (neighborhood, type, floor, price, size) is active, the KPI reflects a
@@ -1154,7 +1488,9 @@ if page == "overview":
     """, unsafe_allow_html=True)
 
     # ── Section: Charts ──────────────────────────────────────────────────────────────
-    quick_range = "הכל"
+    # Read the filter-bar value. (Was hardcoded to "הכל", which silently disabled
+    # the whole time-range path below.)
+    quick_range = st.session_state.get("quick_range", "הכל")
 
     chart_nb   = sel_nb
     chart_type = sel_type
@@ -1169,7 +1505,7 @@ if page == "overview":
             cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
             return df_in[df_in["date"] >= cutoff]
 
-        range_days = {"30 ימים": 30, "7 ימים": 7}.get(quick_range)
+        range_days = RANGE_OPTIONS.get(quick_range)
         history_f = _within_range(history,   range_days)
         nb_hist_f = _within_range(nb_hist,   range_days)
         type_hist_f = _within_range(type_hist, range_days)
@@ -1235,8 +1571,8 @@ if page == "overview":
             if any_narrow_filter:
                 # Pre-aggregated history can't be sliced by price/size/rooms/floor — show today's filtered count only
                 st.markdown(
-                    f'<p style="color:#0f172a;font-size:2rem;font-weight:800;padding:18px 0 4px;">{len(fdf):,} מודעות</p>'
-                    f'<p style="color:#475569;font-size:0.84rem;">תואמות את הפילטרים · היסטוריה לפי מחיר/גודל/חדרים/קומה אינה נשמרת</p>',
+                    f'<p style="color:#141413;font-size:2rem;font-weight:800;padding:18px 0 4px;">{len(fdf):,} מודעות</p>'
+                    f'<p style="color:#3d3d3a;font-size:0.84rem;">תואמות את הפילטרים · היסטוריה לפי מחיר/גודל/חדרים/קומה אינה נשמרת</p>',
                     unsafe_allow_html=True)
             else:
                 qty_color = CYAN
@@ -1246,20 +1582,19 @@ if page == "overview":
                     x=_qx, y=_qy,
                     mode="lines+markers+text",
                     line=dict(color=qty_color, width=2.8, shape="spline", smoothing=0.3),
-                    marker=dict(size=7, color=qty_color, line=dict(color="#ffffff", width=2)),
+                    marker=dict(size=7, color=qty_color, line=dict(color="#faf9f5", width=2)),
                     text=_sparse_labels(_qy, lambda v: f"{int(v):,}"),
                     textposition="top center",
-                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    textfont=dict(size=11, color="#141413", family="Assistant, Inter, sans-serif"),
                     cliponaxis=False,
-                    hovertemplate="<b>%{x}</b><br>%{y} מודעות<extra></extra>"
+                    hovertemplate="<b>%{x|%d/%m/%y}</b><br>%{y} מודעות<extra></extra>"
                 ))
-                _chart(fig_qty, 280)
+                _chart(fig_qty, 320)
                 qty_rng = _yrange(_qy)
                 fig_qty.update_layout(yaxis_title="מודעות",
-                                      xaxis=dict(type="category", fixedrange=True,
-                                                 categoryorder="array", categoryarray=list(_qx)),
+                                      xaxis=_date_xaxis(), margin=dict(t=40),
                                       yaxis=dict(range=qty_rng, fixedrange=True,
-                                                 gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
+                                                 gridcolor="#f5f0e8", tickfont=dict(color="#3d3d3a", size=11)))
                 st.plotly_chart(fig_qty, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1269,27 +1604,26 @@ if page == "overview":
             # Brand blue line; the up/down trend is already carried by the KPI delta
             # pill and the card description, so the line stays on-brand rather than
             # flashing red whenever prices tick up.
-            p_color, fill_col = CYAN, "rgba(37,99,235,0.07)"
+            p_color, fill_col = CYAN, "rgba(204,120,92,0.08)"
             fig_price = go.Figure()
             _px, _py = _daily(price_x, price_y, agg="mean")
             fig_price.add_trace(go.Scatter(
                 x=_px, y=_py,
                 mode="lines+markers+text",
                 line=dict(color=p_color, width=2.8, shape="spline", smoothing=0.3),
-                marker=dict(size=7, color=p_color, line=dict(color="#ffffff", width=2)),
+                marker=dict(size=7, color=p_color, line=dict(color="#faf9f5", width=2)),
                 text=_sparse_labels(_py, lambda v: f"₪{int(v):,}"),
                 textposition="top center",
-                textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                textfont=dict(size=11, color="#141413", family="Assistant, Inter, sans-serif"),
                 cliponaxis=False,
-                hovertemplate="<b>%{x}</b><br>₪%{y:,.0f}/מ״ר<extra></extra>"
+                hovertemplate="<b>%{x|%d/%m/%y}</b><br>₪%{y:,.0f}/מ״ר<extra></extra>"
             ))
-            _chart(fig_price, 280)
+            _chart(fig_price, 320)
             p_rng = _yrange(_py)
             fig_price.update_layout(yaxis_title="₪/מ״ר",
-                                    xaxis=dict(type="category", fixedrange=True,
-                                               categoryorder="array", categoryarray=list(_px)),
+                                    xaxis=_date_xaxis(), margin=dict(t=40),
                                     yaxis=dict(range=p_rng, tickformat=",d", fixedrange=True,
-                                               gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
+                                               gridcolor="#f5f0e8", tickfont=dict(color="#3d3d3a", size=11)))
             st.plotly_chart(fig_price, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1297,70 +1631,68 @@ if page == "overview":
         st.markdown('<div style="margin-top:14px"></div>', unsafe_allow_html=True)
         gc5, gc6 = st.columns(2, gap="medium")
         with gc5:
-            st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="DOM = Days On Market. כמה ימים בממוצע מודעה כבר באוויר. עלייה = מודעות נתקעות (השוק מאט), ירידה = מתחלפות מהר (השוק חם).">ⓘ</span>ממוצע ימים בשוק לאורך זמן</div><div class="card-desc">DOM ממוצע של כל המודעות הפעילות · {scope_label}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="DOM = Days On Market. כמה ימים מודעה טיפוסית (חציון) כבר באוויר. חציון ולא ממוצע, כדי שכמה מודעות שעומדות שנים לא יעוותו את התמונה. עלייה = מודעות נתקעות (השוק מאט), ירידה = מתחלפות מהר (השוק חם).">ⓘ</span>חציון ימים בשוק לאורך זמן</div><div class="card-desc">חציון DOM של כל המודעות הפעילות · {scope_label}</div>', unsafe_allow_html=True)
 
-            # ONLY use avg_active_dom (avg DOM of currently active listings).
-            # Skip the old avg_dom column entirely — it's a different metric (DOM of removed only).
-            # Source priority: per-neighborhood → per-type → market-wide. Hide the line entirely
-            # if a narrow filter (price/size/rooms/floor) is active, since none of the histories slice by those.
+            # Median DOM per day from the archive panel, sliced by the same room
+            # bucket / neighborhood / type as the view. Hidden under a narrow
+            # filter (price/size/floor), which the panel isn't sliced by.
             xs, ys = [], []
-            dom_src = None
             if not any_narrow_filter:
-                if sel_nb != "הכל" and "avg_active_dom" in nb_hist_f.columns:
-                    dom_src = nb_hist_f[nb_hist_f["neighborhood"] == sel_nb]
-                elif sel_type != "הכל" and "avg_active_dom" in type_hist_f.columns:
-                    dom_src = type_hist_f[type_hist_f["apt_type"] == sel_type]
-                elif sel_nb == "הכל" and sel_type == "הכל" and len(rooms_src) and "avg_active_dom" in rooms_src.columns:
-                    dom_src = rooms_src
-            if dom_src is not None and len(dom_src):
-                hd = dom_src.dropna(subset=["avg_active_dom"]).copy()
-                hd["avg_active_dom"] = pd.to_numeric(hd["avg_active_dom"], errors="coerce")
-                hd = hd[hd["avg_active_dom"] > 0]
-                if len(hd):
-                    _ddx, _ddy = _daily(hd["date"], hd["avg_active_dom"], agg="mean")
+                pdom = _rooms_bucket(load_dom_panel(sel_deal), sel_rooms)
+                if sel_nb != "הכל":
+                    pdom = pdom[pdom["neighborhood"] == sel_nb]
+                if sel_type != "הכל":
+                    pdom = pdom[pdom["apt_type"] == sel_type]
+                if range_days is not None:
+                    pdom = pdom[pdom["date"] >= pd.Timestamp.now().normalize() - pd.Timedelta(days=range_days)]
+                if len(pdom):
+                    _med = pdom.groupby("date")["dom"].median()
+                    _ddx, _ddy = _daily(pd.Series(_med.index), pd.Series(_med.values))
                     xs, ys = list(_ddx), list(_ddy)
 
-            # Live point reflects the active filters via fdf
+            # Live point (today) reflects the active filters via fdf
             live_dom = fdf["ימים_בשוק"].dropna()
             live_dom = live_dom[live_dom >= 0]
-            live_avg = float(live_dom.mean()) if len(live_dom) else None
+            live_med = float(live_dom.median()) if len(live_dom) else None
 
-            today_str = datetime.now().strftime("%d/%m/%y")
-            if live_avg is not None and (not xs or xs[-1] != today_str):
-                xs.append(today_str); ys.append(round(live_avg, 1))
+            today_ts = pd.Timestamp.now().normalize()
+            if live_med is not None:
+                if xs and xs[-1] == today_ts:
+                    ys[-1] = round(live_med, 1)
+                else:
+                    xs.append(today_ts); ys.append(round(live_med, 1))
 
             if len(xs) >= 2:
                 fig_dom = go.Figure(go.Scatter(
                     x=xs, y=ys,
                     mode="lines+markers+text",
                     line=dict(color=CYAN2, width=2.8, shape="spline", smoothing=0.3),
-                    marker=dict(size=7, color=CYAN2, line=dict(color="#ffffff", width=2)),
+                    marker=dict(size=7, color=CYAN2, line=dict(color="#faf9f5", width=2)),
                     text=_sparse_labels(ys, lambda v: f"{v:.0f}"),
                     textposition="top center",
-                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    textfont=dict(size=11, color="#141413", family="Assistant, Inter, sans-serif"),
                     cliponaxis=False,
-                    hovertemplate="<b>%{x}</b><br>%{y:.1f} ימים<extra></extra>"
+                    hovertemplate="<b>%{x|%d/%m/%y}</b><br>%{y:.1f} ימים<extra></extra>"
                 ))
-                _chart(fig_dom, 300)
+                _chart(fig_dom, 340)
                 dom_rng = _yrange(ys)
                 fig_dom.update_layout(yaxis_title="ימים",
-                                      xaxis=dict(type="category", fixedrange=True,
-                                                 categoryorder="array", categoryarray=list(xs)),
+                                      xaxis=_date_xaxis(), margin=dict(t=40),
                                       yaxis=dict(range=dom_rng, fixedrange=True,
-                                                 gridcolor="#f1f5f9", tickfont=dict(color="#475569", size=11)))
+                                                 gridcolor="#f5f0e8", tickfont=dict(color="#3d3d3a", size=11)))
                 st.plotly_chart(fig_dom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
             elif len(xs) == 1:
-                st.markdown(f'<p style="color:#0f172a;font-size:1.4rem;font-weight:800;padding:16px 0 4px;">{ys[0]:.1f} ימים בממוצע</p><p style="color:#475569;font-size:0.84rem;">המגמה תיווצר עם ריצות נוספות של ה-Scraper</p>', unsafe_allow_html=True)
+                st.markdown(f'<p style="color:#141413;font-size:1.4rem;font-weight:800;padding:16px 0 4px;">{ys[0]:.1f} ימים (חציון)</p><p style="color:#3d3d3a;font-size:0.84rem;">המגמה תיווצר עם ריצות נוספות של ה-Scraper</p>', unsafe_allow_html=True)
             else:
-                st.markdown('<p style="color:#475569;padding:24px 0;">זמין לאחר ריצת ה-Scraper.</p>', unsafe_allow_html=True)
+                st.markdown('<p style="color:#3d3d3a;padding:24px 0;">זמין לאחר ריצת ה-Scraper.</p>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with gc6:
             # Avg DOM per neighborhood (mean days on market by area)
-            st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="ממוצע ימים בשוק לכל שכונה. עמודה גוהה = השכונה איטית למכור, נמוכה = מודעות מתחלפות מהר.">ⓘ</span>ממוצע ימים בשוק לפי שכונה</div><div class="card-desc">DOM ממוצע פר שכונה (מסונן)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="חציון ימים בשוק לכל שכונה. עמודה גבוהה = השכונה איטית למכור, נמוכה = מודעות מתחלפות מהר.">ⓘ</span>חציון ימים בשוק לפי שכונה</div><div class="card-desc">חציון DOM פר שכונה (מסונן)</div>', unsafe_allow_html=True)
             nb_dom = (fdf[fdf["ימים_בשוק"] >= 0]
                         .groupby("neighborhood")
-                        .agg(avg_dom=("ימים_בשוק", "mean"),
+                        .agg(avg_dom=("ימים_בשוק", "median"),
                              n=("ימים_בשוק", "size"))
                         .reset_index())
             nb_dom = nb_dom[(nb_dom["neighborhood"] != "") & (nb_dom["n"] >= 2)]
@@ -1377,24 +1709,24 @@ if page == "overview":
                     text=[f"{d:.0f} ימים · {int(n)} דירות" for d, n in zip(nb_dom["avg_dom"], nb_dom["n"])],
                     textposition="inside",
                     insidetextanchor="middle",
-                    textfont=dict(size=12, color="white", family="Heebo, Inter, sans-serif"),
+                    textfont=dict(size=12, color="#ffffff", family="Assistant, Inter, sans-serif"),
                     customdata=nb_dom["n"],
-                    hovertemplate="<b>%{y}</b><br>%{x:.1f} ימים בממוצע<br>%{customdata} "
+                    hovertemplate="<b>%{y}</b><br>%{x:.1f} ימים (חציון)<br>%{customdata} "
                                   + ("דירות למכירה" if sel_deal == "sale" else "דירות להשכרה")
                                   + "<extra></extra>",
                 ))
                 _chart(fig_nbdom, max(300, len(nb_dom) * 26))
                 fig_nbdom.update_layout(
                     xaxis_title="ימים", yaxis_title="",
-                    xaxis=dict(fixedrange=True, gridcolor="#f1f5f9",
-                               tickfont=dict(color="#475569", size=11)),
+                    xaxis=dict(fixedrange=True, gridcolor="#f5f0e8",
+                               tickfont=dict(color="#3d3d3a", size=11)),
                     yaxis=dict(fixedrange=True, gridcolor="rgba(0,0,0,0)",
-                               tickfont=dict(color="#0f172a", size=11), automargin=True),
+                               tickfont=dict(color="#141413", size=11), automargin=True),
                     bargap=0.25,
                 )
                 st.plotly_chart(fig_nbdom, use_container_width=True, config=dict(displayModeBar=False, scrollZoom=False))
             else:
-                st.markdown('<p style="color:#475569;padding:24px 0;">אין מספיק נתונים לפילוח לפי שכונה.</p>', unsafe_allow_html=True)
+                st.markdown('<p style="color:#3d3d3a;padding:24px 0;">אין מספיק נתונים לפילוח לפי שכונה.</p>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ── New / Removed listings per DAY (deduped by listing ID) ─────────────
@@ -1443,31 +1775,75 @@ if page == "overview":
         else:
             rem_by_date = pd.Series(dtype=int)
 
+        # Honor the top bar's time range. These two series are built straight from
+        # first_seen.json / dom_log.csv rather than the history frames, so they
+        # don't pass through _within_range() — without this they'd keep showing
+        # the full record while every chart above them was clipped.
+        if range_days is not None:
+            _cut = (pd.Timestamp.now() - pd.Timedelta(days=range_days)).strftime("%Y-%m-%d")
+            if len(new_by_date):
+                new_by_date = new_by_date[new_by_date.index >= _cut]
+            if len(rem_by_date):
+                rem_by_date = rem_by_date[rem_by_date.index >= _cut]
+
+        # Catch-up days: the first successful run after a multi-day outage books
+        # every listing that appeared or vanished during the gap onto that one
+        # date (+419 on 2026-07-07 after an 8-day bot-block, +149 on 2026-10-23
+        # after 17 days). Those bars measure the outage, not a day's activity,
+        # and squash every other bar, so they're left out of both charts.
+        catchup_days, rem_catchup_days = [], []
+        if len(run_log) and "status" in run_log.columns:
+            _ok_days = pd.Series(sorted(run_log.loc[run_log["status"] == "success", "timestamp"]
+                                        .dt.normalize().unique()))
+            # Saturday runs are booked on Friday (the scraper's Saturday->Friday rule)
+            _ok_days = _ok_days.where(_ok_days.dt.dayofweek != 5, _ok_days - pd.Timedelta(days=1))
+            _ok_days = _ok_days.drop_duplicates().reset_index(drop=True)
+            _gaps = _ok_days.diff().dt.days
+            _idx = list(_ok_days.index[_gaps >= CATCHUP_GAP_DAYS])
+            catchup_days = [_ok_days[i].strftime("%Y-%m-%d") for i in _idx]
+            # A gap's removals land one run day LATER than its new listings: the
+            # removal grace period (2 misses + 24h) confirms them on the next
+            # run day, e.g. rent's -120 on 2026-09-03 after the 2026-09-02
+            # catch-up. So the removed chart hides that day as well.
+            rem_catchup_days = catchup_days + [_ok_days[i + 1].strftime("%Y-%m-%d")
+                                               for i in _idx if i + 1 < len(_ok_days)]
+        if catchup_days:
+            new_by_date = new_by_date[~new_by_date.index.isin(catchup_days)]
+            rem_by_date = rem_by_date[~rem_by_date.index.isin(rem_catchup_days)]
+            _shown = [d for d in catchup_days if range_days is None or d >= _cut]
+            _catchup_note = (
+                '<p style="color:#3d3d3a;font-size:0.78rem;margin:2px 0 0;">'
+                f'לא מוצגים ימי השלמה אחרי הפסקה בסריקה: {", ".join(pd.to_datetime(_shown).strftime("%d/%m/%y"))}</p>'
+                if _shown else "")
+        else:
+            _catchup_note = ""
+
         with gc7:
             st.markdown('<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות נראו לראשונה ביום נתון. מקור: yad2_first_seen.json. ספירה לפי מזהה מודעה (לא URL מלא), כך שכפילויות booster לא נספרות. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות חדשות שנוספו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
             if len(new_by_date):
                 fig_new = go.Figure(go.Bar(
-                    x=new_by_date.index, y=new_by_date.values,
+                    x=new_by_date.index, y=new_by_date.values, customdata=new_by_date.index,
                     marker=dict(color=GREEN, line=dict(width=0)),
                     text=[f"+{int(v)}" for v in new_by_date.values],
                     textposition="outside",
-                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    textfont=dict(size=11, color="#141413", family="Assistant, Inter, sans-serif"),
                     cliponaxis=False,
                     hovertemplate="<b>%{x}</b><br>+%{y} מודעות חדשות<extra></extra>",
                 ))
-                _chart(fig_new, 280)
+                _chart(fig_new, 320)
                 fig_new.update_layout(yaxis_title="מודעות", bargap=0.3,
-                                      xaxis=dict(type="category", fixedrange=True,
-                                                 categoryorder="category ascending"))
+                                      xaxis=_date_xaxis("%d/%m"), margin=dict(t=40))
                 new_event = st.plotly_chart(
                     fig_new, use_container_width=True,
                     config=dict(displayModeBar=False, scrollZoom=False),
                     on_select="rerun", key="chart_new_listings",
                     selection_mode="points",
                 )
+                if _catchup_note:
+                    st.markdown(_catchup_note, unsafe_allow_html=True)
             else:
                 new_event = None
-                st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני first_seen.</p>', unsafe_allow_html=True)
+                st.markdown('<p style="color:#3d3d3a;padding:24px 0;">אין נתוני first_seen.</p>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with gc8:
@@ -1475,34 +1851,42 @@ if page == "overview":
             st.markdown(f'<div class="card"><div class="card-title"><span class="tip" data-tip="כמה מודעות ייחודיות הוסרו מהשוק ביום נתון ({_rem_reason}). מקור: yad2_dom_log.csv, מנוקה מכפילויות booster. לחיצה על עמודה מציגה את הדירות.">ⓘ</span>מודעות שהוסרו</div><div class="card-desc">לפי יום · ייחודיות בלבד · לחצ/י על עמודה לפירוט</div>', unsafe_allow_html=True)
             if len(rem_by_date):
                 fig_rem = go.Figure(go.Bar(
-                    x=rem_by_date.index, y=rem_by_date.values,
+                    x=rem_by_date.index, y=rem_by_date.values, customdata=rem_by_date.index,
                     marker=dict(color=RED, line=dict(width=0)),
                     text=[f"-{int(v)}" for v in rem_by_date.values],
                     textposition="outside",
-                    textfont=dict(size=11, color="#0f172a", family="Inter, Heebo, sans-serif"),
+                    textfont=dict(size=11, color="#141413", family="Assistant, Inter, sans-serif"),
                     cliponaxis=False,
                     hovertemplate="<b>%{x}</b><br>-%{y} מודעות הוסרו<extra></extra>",
                 ))
-                _chart(fig_rem, 280)
+                _chart(fig_rem, 320)
                 fig_rem.update_layout(yaxis_title="מודעות", bargap=0.3,
-                                      xaxis=dict(type="category", fixedrange=True,
-                                                 categoryorder="category ascending"))
+                                      xaxis=_date_xaxis("%d/%m"), margin=dict(t=40))
                 rem_event = st.plotly_chart(
                     fig_rem, use_container_width=True,
                     config=dict(displayModeBar=False, scrollZoom=False),
                     on_select="rerun", key="chart_removed_listings",
                     selection_mode="points",
                 )
+                if _catchup_note:
+                    st.markdown(_catchup_note, unsafe_allow_html=True)
             else:
                 rem_event = None
-                st.markdown('<p style="color:#475569;padding:24px 0;">אין נתוני dom_log.</p>', unsafe_allow_html=True)
+                st.markdown('<p style="color:#3d3d3a;padding:24px 0;">אין נתוני dom_log.</p>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ── Drill-down: clicking a bar above shows the listings for that day ─────
         def _click_date(event):
             try:
                 pts = event.selection.points if event else []
-                return str(pts[0]["x"]) if pts else None
+                if not pts:
+                    return None
+                # customdata carries the exact "YYYY-MM-DD" key; x on a date axis
+                # may come back with a time suffix.
+                cd = pts[0].get("customdata")
+                if isinstance(cd, (list, tuple)):
+                    cd = cd[0] if cd else None
+                return str(cd or pts[0]["x"])[:10]
             except Exception:
                 return None
 
@@ -1669,7 +2053,7 @@ elif page == "activity":
 
         def chg_table(data, mode="normal"):
             if data is None or len(data) == 0:
-                st.markdown('<p style="color:#aeaeb2;font-size:0.84rem;padding:8px 0;">אין נתונים.</p>', unsafe_allow_html=True)
+                st.markdown('<p style="color:#8e8b82;font-size:0.84rem;padding:8px 0;">אין נתונים.</p>', unsafe_allow_html=True)
                 return
             rows = ""
             for _, r in data.iterrows():
@@ -1944,7 +2328,7 @@ elif page == "listings":
                     this.gui.href = p.value || '#';
                     this.gui.target = '_blank';
                     this.gui.innerText = 'פתח';
-                    this.gui.style.cssText = 'display:inline-block;padding:5px 12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;border-radius:8px;color:#1d4ed8;font-weight:700;text-decoration:none;font-size:0.78rem;';
+                    this.gui.style.cssText = 'display:inline-block;padding:5px 12px;background:linear-gradient(135deg,#f5f0e8,#efe9de);border:1px solid #e8e0d2;border-radius:8px;color:#a9583e;font-weight:700;text-decoration:none;font-size:0.78rem;';
                 }
                 getGui() { return this.gui; }
             }
@@ -1975,28 +2359,28 @@ elif page == "listings":
         fit_columns_on_grid_load=True,
         custom_css={
             ".ag-root-wrapper": {
-                "border": "1px solid #e2e8f0 !important",
+                "border": "1px solid #e6dfd8 !important",
                 "border-radius": "14px !important",
                 "overflow": "hidden",
-                "box-shadow": "0 1px 3px rgba(15,23,42,0.04) !important",
+                "box-shadow": "0 1px 3px rgba(20,20,19,0.04) !important",
             },
             ".ag-header": {
-                "background": "#f8fafc !important",
-                "border-bottom": "1px solid #e2e8f0 !important",
+                "background": "#faf9f5 !important",
+                "border-bottom": "1px solid #e6dfd8 !important",
             },
-            ".ag-header-cell": {"font-family": "Inter, Heebo, sans-serif !important"},
+            ".ag-header-cell": {"font-family": "Assistant, Inter, sans-serif !important"},
             ".ag-header-cell-menu-button": {
                 "opacity": "1 !important",
-                "color": "#94a3b8",
+                "color": "#8e8b82",
                 "transition": "color 0.15s",
             },
             ".ag-header-cell-menu-button:hover": {
-                "color": "#2563eb !important",
+                "color": "#cc785c !important",
             },
             ".ag-header-cell-label": {
                 "font-weight": "700 !important",
                 "font-size": "0.95rem !important",
-                "color": "#0f172a !important",
+                "color": "#141413 !important",
                 "letter-spacing": "0.01em",
                 "white-space": "normal !important",
                 "line-height": "1.15 !important",
@@ -2010,19 +2394,19 @@ elif page == "listings":
             },
             ".ag-row": {
                 "font-size": "0.86rem",
-                "font-family": "Inter, Heebo, sans-serif !important",
-                "color": "#0f172a !important",
-                "border-bottom": "1px solid #f1f5f9 !important",
+                "font-family": "Assistant, Inter, sans-serif !important",
+                "color": "#141413 !important",
+                "border-bottom": "1px solid #f5f0e8 !important",
             },
-            ".ag-row:hover": {"background": "#f8fafc !important"},
-            ".ag-row-odd": {"background": "#fafbfc !important"},
+            ".ag-row:hover": {"background": "#faf9f5 !important"},
+            ".ag-row-odd": {"background": "#faf9f5 !important"},
             ".ag-cell": {"display": "flex !important", "align-items": "center !important"},
             ".ag-set-filter-list": {"direction": "rtl"},
         }
     )
 
 st.markdown("""
-<div style="text-align:center;padding:28px 0 18px;margin-top:24px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:0.74rem;font-weight:500;">
-    מעקב שוק יד2 · רעננה · מתעדכן 08:00 ו-20:00
+<div style="text-align:center;padding:28px 0 18px;margin-top:24px;border-top:1px solid #e6dfd8;color:#8e8b82;font-size:0.74rem;font-weight:500;">
+    מעקב שוק יד2 · רעננה · מתעדכן 09:00 ו-20:00
 </div>
 """, unsafe_allow_html=True)

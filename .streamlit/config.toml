@@ -1,9 +1,15 @@
-# Brand theme — makes Streamlit's accent widgets (sliders, focus rings, selection)
-# use the Yad2 dashboard's blue instead of the default red (#ff4b4b).
+# Brand theme — Anthropic / Claude design system.
+# Drives the Streamlit widget chrome that CSS can't reach (slider fills, focus
+# rings, selection highlights, BaseWeb menu surfaces). Values mirror the token
+# block at the top of yad2_dashboard.py — keep the two in sync.
+#   primaryColor          = colors.primary        (coral, the brand voltage)
+#   backgroundColor       = colors.canvas         (tinted cream, NOT pure white)
+#   secondaryBackgroundColor = colors.surface-card
+#   textColor             = colors.ink            (warm off-black)
 [theme]
 base = "light"
-primaryColor = "#2563eb"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f1f5f9"
-textColor = "#0f172a"
+primaryColor = "#cc785c"
+backgroundColor = "#faf9f5"
+secondaryBackgroundColor = "#efe9de"
+textColor = "#141413"
 font = "sans serif"
