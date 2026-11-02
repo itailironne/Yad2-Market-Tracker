@@ -1,197 +1,512 @@
 {
-  "05nqneb6": {
-    "misses": 3,
+  "c23cjzfu": {
+    "misses": 1,
     "record": {
-      "price": "₪ 9,500",
-      "street": "אוסטרובסקי",
+      "price": "₪ 10,000",
+      "street": "אהוד מנור 17",
+      "info": "דירה, נווה זמר, רעננה",
+      "rooms": "5",
+      "floor": "4",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/c23cjzfu?opened-from=feed&component-type=main_feed&spot=standard&location=37",
+      "date_posted": "2026-10-22"
+    },
+    "first_seen": "2026-10-22",
+    "first_missed_at": 1793651339.6617084
+  },
+  "ff383e16": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 12,480",
+      "street": "יהודה עמיחי 16",
+      "info": "דירה, נווה זמר, רעננה",
+      "rooms": "4.5",
+      "floor": "5",
+      "size_sqm": "154",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/ff383e16?opened-from=feed&component-type=main_feed&spot=standard&location=32&pagination=2",
+      "date_posted": "2026-10-11"
+    },
+    "first_seen": "2026-10-11",
+    "first_missed_at": 1793651339.6617084
+  },
+  "uqqypwgu": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 9,000",
+      "street": "עוזי חיטמן 24",
+      "info": "דירה, נווה זמר, רעננה",
+      "rooms": "4",
+      "floor": "2",
+      "size_sqm": "105",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/uqqypwgu?opened-from=feed&component-type=main_feed&spot=standard&location=34&pagination=3",
+      "date_posted": "2026-10-15"
+    },
+    "first_seen": "2026-10-15",
+    "first_missed_at": 1793651339.6617084
+  },
+  "9u1gumrt": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 7,500",
+      "street": "המעלות 18",
       "info": "דירה, מרכז דרום, רעננה",
       "rooms": "5",
       "floor": "2",
-      "size_sqm": "145",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/05nqneb6?opened-from=feed&component-type=main_feed&spot=standard&location=23&pagination=4",
-      "date_posted": "2026-07-29"
+      "size_sqm": "114",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/9u1gumrt?opened-from=feed&component-type=main_feed&spot=standard&location=13",
+      "date_posted": "2026-07-12"
     },
-    "first_seen": "2026-10-23",
-    "first_missed_at": 1792734375.0499573
+    "first_seen": "2026-10-21",
+    "first_missed_at": 1793651339.6617084
   },
-  "xc0p0i0z": {
-    "misses": 3,
+  "ugxldthp": {
+    "misses": 1,
     "record": {
-      "price": "₪ 5,000",
-      "street": "סשה ארגוב 52",
-      "info": "דירה, נווה זמר, רעננה",
+      "price": "₪ 12,000",
+      "street": "בורוכוב 45",
+      "info": "דירה, נווה דוד רמז, רעננה",
       "rooms": "5",
       "floor": "3",
-      "size_sqm": "16",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/xc0p0i0z?opened-from=feed&component-type=main_feed&spot=standard&location=17&pagination=3",
-      "date_posted": "2026-09-11"
+      "size_sqm": "10",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/ugxldthp?opened-from=feed&component-type=main_feed&spot=standard&location=34",
+      "date_posted": "2026-10-04"
     },
-    "first_seen": "2026-09-13",
-    "first_missed_at": 1792734375.0499573
+    "first_seen": "2026-10-04",
+    "first_missed_at": 1793651339.6617084
   },
-  "o3799sqn": {
-    "misses": 5,
+  "3p6uvepk": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 9,200",
+      "street": "עקיבא 8",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "4",
+      "floor": "3",
+      "size_sqm": "94",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/3p6uvepk?opened-from=feed&component-type=main_feed&spot=standard&location=41",
+      "date_posted": "2026-10-13"
+    },
+    "first_seen": "2026-10-14",
+    "first_missed_at": 1793651339.6617084
+  },
+  "xc1vkg74": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 10,600",
+      "street": "קרית אליהו גולומב",
+      "info": "דירה, קרית אליהו גולומב, רעננה",
+      "rooms": "5",
+      "floor": "1",
+      "size_sqm": "135",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/xc1vkg74?opened-from=feed&component-type=main_feed&spot=standard&location=19&pagination=4",
+      "date_posted": "2026-10-18"
+    },
+    "first_seen": "2026-10-21",
+    "first_missed_at": 1793651339.6617084
+  },
+  "kuwau60k": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 7,450",
+      "street": "בר אילן 37",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "4.5",
+      "floor": "2",
+      "size_sqm": "140",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/kuwau60k?opened-from=feed&component-type=main_feed&spot=standard&location=46",
+      "date_posted": "2026-09-06"
+    },
+    "first_seen": "2026-09-06",
+    "first_missed_at": 1793651339.6617084
+  },
+  "fixqc8o7": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 6,300",
+      "street": "בורוכוב",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "4",
+      "floor": "4",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/fixqc8o7?opened-from=feed&component-type=main_feed&spot=standard&location=8&pagination=4",
+      "date_posted": "2026-08-24"
+    },
+    "first_seen": "2026-09-02",
+    "first_missed_at": 1793651339.6617084
+  },
+  "whsb3zsv": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 10,000",
+      "street": "משה וילנסקי 68",
+      "info": "דירה, נווה זמר, רעננה",
+      "rooms": "5",
+      "floor": "4",
+      "size_sqm": "138",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/whsb3zsv?opened-from=feed&component-type=main_feed&spot=standard&location=8",
+      "date_posted": "2026-10-08"
+    },
+    "first_seen": "2026-10-08",
+    "first_missed_at": 1793651339.6617084
+  },
+  "unglvsj5": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 9,300",
+      "street": "דירה",
+      "info": "דירה, רעננה",
+      "rooms": "4",
+      "floor": "1",
+      "size_sqm": "117",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/unglvsj5?opened-from=feed&component-type=main_feed&spot=standard&location=20",
+      "date_posted": "2026-06-11"
+    },
+    "first_seen": "2026-08-06",
+    "first_missed_at": 1793651339.6617084
+  },
+  "3iuiim18": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 13,500",
+      "street": "בר אילן 40",
+      "info": "גג/ פנטהאוז, נווה דוד רמז, רעננה",
+      "rooms": "4",
+      "floor": "5",
+      "size_sqm": "220",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/3iuiim18?opened-from=feed&component-type=main_feed&spot=standard&location=44",
+      "date_posted": "2026-10-18"
+    },
+    "first_seen": "2026-10-21",
+    "first_missed_at": 1793651339.6617084
+  },
+  "7yt6idui": {
+    "misses": 1,
     "record": {
       "price": "₪ 8,500",
+      "street": "שברץ 22",
+      "info": "דירה, לסטר/רבוצקי, רעננה",
+      "rooms": "5",
+      "floor": "1",
+      "size_sqm": "124",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/7yt6idui?opened-from=feed&component-type=main_feed&spot=standard&location=17",
+      "date_posted": "2026-05-17"
+    },
+    "first_seen": "2026-08-06",
+    "first_missed_at": 1793651339.6617084
+  },
+  "0smtpirx": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 14,500",
+      "street": "השחר 51",
+      "info": "בית פרטי/ קוטג', קרית גנים, רעננה",
+      "rooms": "5",
+      "floor": "0",
+      "size_sqm": "540",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/0smtpirx?opened-from=feed&component-type=main_feed&spot=standard&location=5",
+      "date_posted": "2026-10-15"
+    },
+    "first_seen": "2026-10-15",
+    "first_missed_at": 1793651339.6617084
+  },
+  "0kbzn42v": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 8,500",
+      "street": "דירה",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "4",
+      "floor": "3",
+      "size_sqm": "110",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/0kbzn42v?opened-from=feed&component-type=main_feed&spot=platinum&location=1",
+      "date_posted": "2026-10-22"
+    },
+    "first_seen": "2026-10-23",
+    "first_missed_at": 1793651339.6617084
+  },
+  "ymp5lwnb": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 9,500",
+      "street": "חנקין",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "5",
+      "floor": "2",
+      "size_sqm": "135",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/ymp5lwnb?opened-from=feed&component-type=main_feed&spot=platinum&location=2&pagination=2",
+      "date_posted": "2026-10-12"
+    },
+    "first_seen": "2026-10-14",
+    "first_missed_at": 1793651339.6617084
+  },
+  "4mer0hf7": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 6,500",
+      "street": "ברנר 1",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "5",
+      "floor": "2",
+      "size_sqm": "130",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/4mer0hf7?opened-from=feed&component-type=main_feed&spot=standard&location=37&pagination=2",
+      "date_posted": "2026-06-26"
+    },
+    "first_seen": "2026-08-12",
+    "first_missed_at": 1793651339.6617084
+  },
+  "gejzub9w": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 8,400",
+      "street": "לוי אשכול 12",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "4",
+      "floor": "1",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/gejzub9w?opened-from=feed&component-type=main_feed&spot=standard&location=11",
+      "date_posted": "2026-08-02"
+    },
+    "first_seen": "2026-08-06",
+    "first_missed_at": 1793651339.6617084
+  },
+  "miesrerv": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 9,500",
+      "street": "גג/ פנטהאוז",
+      "info": "גג/ פנטהאוז, מרכז דרום, רעננה",
+      "rooms": "5",
+      "floor": "3",
+      "size_sqm": "140",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/miesrerv?opened-from=feed&component-type=main_feed&spot=standard&location=29&pagination=3",
+      "date_posted": "2026-10-06"
+    },
+    "first_seen": "2026-10-08",
+    "first_missed_at": 1793651339.6617084
+  },
+  "dzb69ahc": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 8,700",
+      "street": "מכבי 20",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "5",
+      "floor": "3",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/dzb69ahc?opened-from=feed&component-type=main_feed&spot=standard&location=4&pagination=2",
+      "date_posted": "2026-08-11"
+    },
+    "first_seen": "2026-08-11",
+    "first_missed_at": 1793651339.6617084
+  },
+  "cpfd5tuj": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 8,300",
+      "street": "לב הפארק",
+      "info": "דירה, לב הפארק, רעננה",
+      "rooms": "4.5",
+      "floor": "1",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/cpfd5tuj?opened-from=feed&component-type=main_feed&spot=standard&location=22&pagination=3",
+      "date_posted": "2026-09-02"
+    },
+    "first_seen": "2026-09-03",
+    "first_missed_at": 1793651339.6617084
+  },
+  "vwhkhu8a": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 7,500",
+      "street": "רמב\"ם 30",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "4",
+      "floor": "2",
+      "size_sqm": "115",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/vwhkhu8a?opened-from=feed&component-type=main_feed&spot=standard&location=26",
+      "date_posted": "2026-10-07"
+    },
+    "first_seen": "2026-10-08",
+    "first_missed_at": 1793651339.6617084
+  },
+  "ve8u3tvp": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 6,600",
+      "street": "אחוזה 127",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "4",
+      "floor": "1",
+      "size_sqm": "104",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/ve8u3tvp?opened-from=feed&component-type=main_feed&spot=standard&location=36&pagination=2",
+      "date_posted": "2026-09-21"
+    },
+    "first_seen": "2026-09-23",
+    "first_missed_at": 1793651339.6617084
+  },
+  "7oxthz38": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 7,000",
+      "street": "רמב\"ם 22",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "5",
+      "floor": "6",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/7oxthz38?opened-from=feed&component-type=main_feed&spot=standard&location=38&pagination=2",
+      "date_posted": "2026-09-21"
+    },
+    "first_seen": "2026-09-23",
+    "first_missed_at": 1793651339.6617084
+  },
+  "cdgn65p4": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 12,000",
+      "street": "הל\"ה 8",
+      "info": "דופלקס, קרית ויצמן, רעננה",
+      "rooms": "4.5",
+      "floor": "6",
+      "size_sqm": "260",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/cdgn65p4?opened-from=feed&component-type=main_feed&spot=standard&location=7",
+      "date_posted": "2026-10-15"
+    },
+    "first_seen": "2026-10-15",
+    "first_missed_at": 1793651339.6617084
+  },
+  "n0beolfy": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 7,200",
+      "street": "שברץ 2",
+      "info": "דירה, לסטר/רבוצקי, רעננה",
+      "rooms": "4",
+      "floor": "3",
+      "size_sqm": "106",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/n0beolfy?opened-from=feed&component-type=main_feed&spot=standard&location=24",
+      "date_posted": "2026-08-21"
+    },
+    "first_seen": "2026-10-08",
+    "first_missed_at": 1793651339.6617084
+  },
+  "z04sju99": {
+    "misses": 1,
+    "record": {
+      "price": "למידע נוסף",
+      "street": "משה בן מנחם 5",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "5",
+      "floor": "7",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/z04sju99?opened-from=feed&component-type=main_feed&spot=standard&location=24&pagination=2",
+      "date_posted": "2026-10-13"
+    },
+    "first_seen": "2026-10-14",
+    "first_missed_at": 1793651339.6617084
+  },
+  "h62bq2p4": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 2,600",
+      "street": "גולומב 30",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "4",
+      "floor": "3",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/h62bq2p4?opened-from=feed&component-type=main_feed&spot=standard&location=21&pagination=2",
+      "date_posted": "2026-10-15"
+    },
+    "first_seen": "2026-10-15",
+    "first_missed_at": 1793651339.6617084
+  },
+  "2eugd4af": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 6,200",
+      "street": "בורוכוב 9",
+      "info": "דירה, נווה דוד רמז, רעננה",
+      "rooms": "4",
+      "floor": "1",
+      "size_sqm": "107",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/2eugd4af?opened-from=feed&component-type=main_feed&spot=standard&location=18",
+      "date_posted": "2026-09-28"
+    },
+    "first_seen": "2026-09-30",
+    "first_missed_at": 1793651339.6617084
+  },
+  "wma83kug": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 5,300",
+      "street": "אחד העם",
+      "info": "דירה, לסטר/רבוצקי, רעננה",
+      "rooms": "4",
+      "floor": "3",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/wma83kug?opened-from=feed&component-type=main_feed&spot=standard&location=39&pagination=2",
+      "date_posted": "2026-10-06"
+    },
+    "first_seen": "2026-10-08",
+    "first_missed_at": 1793651339.6617084
+  },
+  "ucyclix9": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 15,500",
       "street": "בית פרטי/ קוטג'",
       "info": "בית פרטי/ קוטג', מרכז דרום, רעננה",
       "rooms": "5",
       "floor": "0",
-      "size_sqm": "250",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/o3799sqn?opened-from=feed&component-type=main_feed&spot=standard&location=41&pagination=3",
-      "date_posted": "2026-07-22"
+      "size_sqm": "350",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/ucyclix9?opened-from=feed&component-type=main_feed&spot=standard&location=30&pagination=3",
+      "date_posted": "2026-10-19"
     },
-    "first_seen": "2026-10-22",
-    "first_missed_at": 1792667615.2318058
+    "first_seen": "2026-10-21",
+    "first_missed_at": 1793651339.6617084
   },
-  "1eur7lly": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 8,700",
-      "street": "דירה",
-      "info": "דירה, נווה דוד רמז, רעננה",
-      "rooms": "4",
-      "floor": "2",
-      "size_sqm": "100",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/1eur7lly?opened-from=feed&component-type=main_feed&spot=standard&location=31",
-      "date_posted": "2026-10-13"
-    },
-    "first_seen": "2026-10-14",
-    "first_missed_at": 1792734375.0499573
-  },
-  "r9xga0ge": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 5,750",
-      "street": "מכבי",
-      "info": "דירה, נווה דוד רמז, רעננה",
-      "rooms": "5",
-      "floor": "3",
-      "size_sqm": "112",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/r9xga0ge?opened-from=feed&component-type=main_feed&spot=standard&location=21&pagination=3",
-      "date_posted": "2026-04-13"
-    },
-    "first_seen": "2026-10-14",
-    "first_missed_at": 1792734375.0499573
-  },
-  "l3v6t8se": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 12,800",
-      "street": "סמטת החומה 3",
-      "info": "גג/ פנטהאוז, 2003, רעננה",
-      "rooms": "5",
-      "floor": "4",
-      "size_sqm": "190",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/l3v6t8se?opened-from=feed&component-type=main_feed&spot=standard&location=11&pagination=3",
-      "date_posted": "2026-09-25"
-    },
-    "first_seen": "2026-09-30",
-    "first_missed_at": 1792734375.0499573
-  },
-  "jp7z3y22": {
-    "misses": 4,
-    "record": {
-      "price": "₪ 8,200",
-      "street": "אהוד מנור 11",
-      "info": "דירה, נווה זמר, רעננה",
-      "rooms": "4",
-      "floor": "3",
-      "size_sqm": "110",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/jp7z3y22?opened-from=feed&component-type=main_feed&spot=standard&location=36",
-      "date_posted": "2026-10-09"
-    },
-    "first_seen": "2026-10-11",
-    "first_missed_at": 1792671188.4355078
-  },
-  "rohzseu8": {
+  "0jw7og8x": {
     "misses": 1,
     "record": {
-      "price": "₪ 7,600",
-      "street": "בר אילן 43",
-      "info": "דירה, נווה דוד רמז, רעננה",
-      "rooms": "4",
-      "floor": "2",
-      "size_sqm": "112",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/rohzseu8?opened-from=feed&component-type=main_feed&spot=standard&location=10&pagination=2",
+      "price": "₪ 8,800",
+      "street": "שדרות בגין 5",
+      "info": "דירה, לב הפארק, רעננה",
+      "rooms": "4.5",
+      "floor": "1",
+      "size_sqm": "120",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/0jw7og8x?opened-from=feed&component-type=main_feed&spot=standard&location=8&pagination=2",
       "date_posted": "2026-10-20"
     },
     "first_seen": "2026-10-21",
-    "first_missed_at": 1792746925.014961
+    "first_missed_at": 1793651339.6617084
   },
-  "35rniiyp": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 8,600",
-      "street": "אוסטרובסקי 35",
-      "info": "דירה, מרכז דרום, רעננה",
-      "rooms": "5",
-      "floor": "5",
-      "size_sqm": "137",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/35rniiyp?opened-from=feed&component-type=main_feed&spot=standard&location=36&pagination=2",
-      "date_posted": "2026-09-28"
-    },
-    "first_seen": "2026-09-30",
-    "first_missed_at": 1792734375.0499573
-  },
-  "dwrdugvm": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 11,300",
-      "street": "קרית הפרחים - 2005",
-      "info": "דירת גן, קרית הפרחים - 2005, רעננה",
-      "rooms": "4",
-      "floor": "0",
-      "size_sqm": "130",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/dwrdugvm?opened-from=feed&component-type=main_feed&spot=standard&location=22&pagination=2",
-      "date_posted": "2026-08-31"
-    },
-    "first_seen": "2026-10-14",
-    "first_missed_at": 1792734375.0499573
-  },
-  "vznzxewu": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 5,750",
-      "street": "מכבי",
-      "info": "דירה, נווה דוד רמז, רעננה",
-      "rooms": "4",
-      "floor": "3",
-      "size_sqm": "115",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/vznzxewu?opened-from=feed&component-type=main_feed&spot=standard&location=40&pagination=3",
-      "date_posted": "2026-07-22"
-    },
-    "first_seen": "2026-10-04",
-    "first_missed_at": 1792734375.0499573
-  },
-  "ckr94zlo": {
-    "misses": 3,
-    "record": {
-      "price": "₪ 6,200",
-      "street": "נווה דוד רמז",
-      "info": "דירה, נווה דוד רמז, רעננה",
-      "rooms": "5",
-      "floor": "1",
-      "size_sqm": "128",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/ckr94zlo?opened-from=feed&component-type=main_feed&spot=standard&location=21&pagination=4",
-      "date_posted": "2026-10-08"
-    },
-    "first_seen": "2026-10-08",
-    "first_missed_at": 1792734375.0499573
-  },
-  "q2e2tlxp": {
+  "kskqaoif": {
     "misses": 1,
     "record": {
-      "price": "₪ 8,200",
-      "street": "קרית שז\"ר",
-      "info": "דירה, קרית שז\"ר, רעננה",
+      "price": "₪ 16,000",
+      "street": "ארלוזורוב",
+      "info": "גג/ פנטהאוז, מרכז דרום, רעננה",
       "rooms": "4",
-      "floor": "7",
-      "size_sqm": "132",
-      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/q2e2tlxp?opened-from=feed&component-type=main_feed&spot=platinum&location=2&pagination=2",
-      "date_posted": "2026-10-13"
+      "floor": "6",
+      "size_sqm": "223",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/kskqaoif?opened-from=feed&component-type=main_feed&spot=standard&location=11&pagination=4",
+      "date_posted": "2026-10-19"
     },
-    "first_seen": "2026-10-14",
-    "first_missed_at": 1792746925.014961
+    "first_seen": "2026-10-21",
+    "first_missed_at": 1793651339.6617084
+  },
+  "gqhut4p5": {
+    "misses": 1,
+    "record": {
+      "price": "₪ 9,000",
+      "street": "ברנר",
+      "info": "דירה, מרכז דרום, רעננה",
+      "rooms": "5",
+      "floor": "4",
+      "size_sqm": "126",
+      "url": "https://www.yad2.co.il/realestate/item/center-and-sharon/gqhut4p5?opened-from=feed&component-type=main_feed&spot=standard&location=44&pagination=3",
+      "date_posted": "2021-09-10"
+    },
+    "first_seen": "2026-10-08",
+    "first_missed_at": 1793651339.6617084
   }
 }
