@@ -347,3 +347,305 @@ Call log:
 2026-08-03 18:05,success,34,664,10,18,2,0,2.49,3985795,3650000,670000,21000000,28111,2.62,34.8,62.5,
 2026-08-03 20:38,success,34,704,17,18,0,0,0,3965197,3650000,670000,21000000,28035,2.71,38.0,60.0,
 2026-08-04 07:22,success,33,721,13,2,0,0,0,3940590,3650000,670000,21000000,28079,0.28,39.6,65.0,
+2026-08-04 12:12,success,33,709,2,7,6,0,2.78,3949809,3650000,670000,21000000,28132,0.97,38.7,28.9,
+2026-08-04 20:03,success,33,671,9,4,1,1,9.47,3932810,3650000,670000,12900000,28067,0.56,35.6,20.2,
+2026-08-05 09:00,success,33,698,4,24,1,0,2.34,3935042,3650000,670000,21000000,28103,3.58,38.0,43.0,
+2026-08-06 13:03,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=27168
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=27168
+  - [pid=27168] <gracefully close start>
+  - [pid=27168] <kill>
+  - [pid=27168] <will force kill>
+  - [pid=27168] taskkill stderr: ERROR: The process ""27168"" not found.
+  - [pid=27168] <process did exit: exitCode=21, signal=null>
+  - [pid=27168] starting temporary directories cleanup
+  - [pid=27168] finished temporary directories cleanup
+  - [pid=27168] <gracefully close end>
+"
+2026-08-06 14:01,success,32,689,19,4,4,0,3.5,3936452,3650000,670000,21000000,28114,0.57,49.8,48.5,
+2026-08-08 21:16,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=7208
+[pid=7208] <process did exit: exitCode=21, signal=null>
+[pid=7208] starting temporary directories cleanup
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=7208
+  - [pid=7208] <process did exit: exitCode=21, signal=null>
+  - [pid=7208] starting temporary directories cleanup
+  - [pid=7208] <gracefully close start>
+  - [pid=7208] <kill>
+  - [pid=7208] <skipped force kill spawnedProcess.killed=false processClosed=true>
+  - [pid=7208] finished temporary directories cleanup
+  - [pid=7208] <gracefully close end>
+"
+2026-08-08 22:01,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=10088
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=10088
+  - [pid=10088] <gracefully close start>
+  - [pid=10088] <kill>
+  - [pid=10088] <will force kill>
+  - [pid=10088] taskkill stderr: ERROR: The process ""10088"" not found.
+  - [pid=10088] <process did exit: exitCode=21, signal=null>
+  - [pid=10088] starting temporary directories cleanup
+  - [pid=10088] finished temporary directories cleanup
+  - [pid=10088] <gracefully close end>
+"
+2026-08-08 21:55,success,32,674,13,26,3,0,2.91,3928835,3630000,675000,21000000,28182,3.77,47.5,35.4,
+2026-08-09 09:01,success,32,661,5,14,0,0,0,3927477,3650000,675000,21000000,28216,2.08,46.5,47.6,
+2026-08-09 22:25,success,33,691,17,3,5,0,2.42,3924747,3650000,675000,21000000,28191,0.45,47.6,60.3,
+2026-08-10 09:58,success,33,625,5,10,0,0,0,3929283,3650000,675000,21000000,28127,1.45,44.0,44.1,
+2026-08-11 07:01,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=14292
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=14292
+  - [pid=14292] <gracefully close start>
+  - [pid=14292] <kill>
+  - [pid=14292] <will force kill>
+  - [pid=14292] taskkill stderr: ERROR: The process ""14292"" not found.
+  - [pid=14292] <process did exit: exitCode=21, signal=null>
+  - [pid=14292] starting temporary directories cleanup
+  - [pid=14292] finished temporary directories cleanup
+  - [pid=14292] <gracefully close end>
+"
+2026-08-11 07:33,success,33,685,7,6,2,0,1.96,3932936,3650000,675000,21000000,28222,0.96,46.6,72.8,
+2026-08-11 08:01,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=28340
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=28340
+  - [pid=28340] <gracefully close start>
+  - [pid=28340] <kill>
+  - [pid=28340] <will force kill>
+  - [pid=28340] taskkill stderr: ERROR: The process ""28340"" not found.
+  - [pid=28340] <process did exit: exitCode=21, signal=null>
+  - [pid=28340] starting temporary directories cleanup
+  - [pid=28340] finished temporary directories cleanup
+  - [pid=28340] <gracefully close end>
+"
+2026-08-11 10:27,success,33,653,4,10,2,0,2.64,3934535,3650000,675000,21000000,28117,1.46,44.2,54.2,
+2026-08-12 21:17,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=13912
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=13912
+  - [pid=13912] <gracefully close start>
+  - [pid=13912] <kill>
+  - [pid=13912] <will force kill>
+  - [pid=13912] taskkill stderr: ERROR: The process ""13912"" not found.
+  - [pid=13912] <process did exit: exitCode=21, signal=null>
+  - [pid=13912] starting temporary directories cleanup
+  - [pid=13912] finished temporary directories cleanup
+  - [pid=13912] <gracefully close end>
+"
+2026-08-12 22:02,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=33696
+[pid=33696] <process did exit: exitCode=21, signal=null>
+[pid=33696] starting temporary directories cleanup
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=33696
+  - [pid=33696] <process did exit: exitCode=21, signal=null>
+  - [pid=33696] starting temporary directories cleanup
+  - [pid=33696] <gracefully close start>
+  - [pid=33696] <kill>
+  - [pid=33696] <skipped force kill spawnedProcess.killed=false processClosed=true>
+  - [pid=33696] finished temporary directories cleanup
+  - [pid=33696] <gracefully close end>
+"
+2026-08-12 21:41,success,33,656,25,11,3,0,3.07,3932916,3650000,675000,21000000,28051,1.68,42.8,53.7,
+2026-08-13 12:53,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=4780
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=4780
+  - [pid=4780] <gracefully close start>
+  - [pid=4780] <kill>
+  - [pid=4780] <will force kill>
+  - [pid=4780] taskkill stderr: ERROR: The process ""4780"" not found.
+  - [pid=4780] <process did exit: exitCode=21, signal=null>
+  - [pid=4780] starting temporary directories cleanup
+  - [pid=4780] finished temporary directories cleanup
+  - [pid=4780] <gracefully close end>
+"
+2026-08-13 13:01,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=22072
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=22072
+  - [pid=22072] <gracefully close start>
+  - [pid=22072] <kill>
+  - [pid=22072] <will force kill>
+  - [pid=22072] taskkill stderr: ERROR: The process ""22072"" not found.
+  - [pid=22072] <process did exit: exitCode=21, signal=null>
+  - [pid=22072] starting temporary directories cleanup
+  - [pid=22072] finished temporary directories cleanup
+  - [pid=22072] <gracefully close end>
+"
+2026-08-13 11:01,success,33,592,13,25,0,0,0,3900283,3610000,675000,21000000,28046,3.81,38.7,46.0,
+2026-08-16 18:18,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Timeout 180000ms exceeded.
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=10536
+  - [pid=10536][err] [10536:26400:0816/181340.292:ERROR:content\browser\network_service_instance_impl.cc:721] Network service crashed or was terminated, restarting service.
+"
+2026-08-18 14:56,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=16600
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=16600
+  - [pid=16600] <gracefully close start>
+  - [pid=16600] <kill>
+  - [pid=16600] <will force kill>
+  - [pid=16600] taskkill stderr: ERROR: The process ""16600"" not found.
+  - [pid=16600] <process did exit: exitCode=21, signal=null>
+  - [pid=16600] starting temporary directories cleanup
+  - [pid=16600] finished temporary directories cleanup
+  - [pid=16600] <gracefully close end>
+"
+2026-08-18 15:02,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=19296
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=19296
+  - [pid=19296] <gracefully close start>
+  - [pid=19296] <kill>
+  - [pid=19296] <will force kill>
+  - [pid=19296] taskkill stderr: ERROR: The process ""19296"" not found.
+  - [pid=19296] <process did exit: exitCode=21, signal=null>
+  - [pid=19296] starting temporary directories cleanup
+  - [pid=19296] finished temporary directories cleanup
+  - [pid=19296] <gracefully close end>
+"
+2026-08-18 15:30,success,33,687,42,14,7,1,2.54,3933707,3620000,680000,21000000,28064,2.36,43.2,32.9,
+2026-08-24 15:56,success,32,690,45,33,9,0,3.57,3950918,3650000,590000,21000000,28032,4.8,42.0,49.6,
+2026-08-24 20:10,error,,,,,,,,,,,,,,,,Could not obtain Radware clearance after repeated warm-ups; will retry.
+2026-08-31 18:24,success,33,641,51,48,16,0,3.73,3976816,3650000,680000,21000000,28177,6.96,38.4,54.9,
+2026-09-01 13:01,success,33,704,16,51,1,0,9.59,3958745,3620000,590000,21000000,28271,7.96,41.2,47.0,
+2026-09-01 13:15,error,,,,,,,,,,,,,,,,Could not obtain Radware clearance after repeated warm-ups; will retry.
+2026-09-01 20:00,success,34,661,7,6,0,1,0,3969743,3650000,2000000,21000000,28285,0.85,38.5,49.5,
+2026-09-02 07:19,success,35,663,3,0,1,0,3.46,3948165,3620000,2000000,21000000,28241,0.0,39.4,,
+2026-09-03 14:39,success,33,719,25,13,9,0,1.86,3959651,3620000,2000000,21000000,28315,1.96,41.6,35.2,
+2026-09-03 22:07,success,33,720,6,0,2,0,0.38,3950984,3630000,2000000,21000000,28274,0.0,41.2,,
+2026-09-04 11:42,success,33,715,2,0,3,0,3.24,3951555,3620000,2000000,21000000,28205,0.0,41.1,,
+2026-09-04 22:01,success,33,710,3,15,1,0,2.64,3957906,3630000,2000000,21000000,28245,2.1,40.3,51.9,
+2026-09-05 10:44,success,33,704,0,0,0,0,0,3958245,3650000,2000000,21000000,28162,0.0,40.4,,
+2026-09-05 20:01,success,34,662,0,2,0,0,0,3960978,3620000,2000000,21000000,28118,0.28,38.8,87.5,
+2026-09-06 22:39,success,33,652,8,7,5,0,6.14,3961169,3630000,2000000,21000000,28287,1.06,37.6,47.4,
+2026-09-08 08:13,success,33,711,9,8,2,0,2.13,3955166,3650000,2000000,21000000,28149,1.23,40.6,76.6,
+2026-09-08 23:46,error,,,,,,,,,,,,,,,,Could not obtain Radware clearance after repeated warm-ups; will retry.
+2026-09-08 23:44,success,33,711,5,0,4,0,2.94,3953078,3630000,2000000,21000000,28131,0.0,40.3,,
+2026-09-09 13:54,success,33,694,2,9,2,0,5.4,3957141,3650000,2000000,21000000,28247,1.27,39.6,59.8,
+2026-09-09 21:01,success,33,671,1,0,0,0,0,3965748,3650000,2000000,21000000,28130,0.0,38.1,,
+2026-09-09 21:26,success,33,684,0,0,0,0,0,3941419,3650000,2000000,21000000,28249,0.0,38.6,,
+2026-09-09 22:00,success,33,703,0,0,0,0,0,3957075,3620000,2000000,21000000,28125,0.0,39.7,,
+2026-09-10 11:07,success,33,712,2,9,1,0,3.9,3955051,3650000,2000000,21000000,28193,1.28,40.3,76.8,
+2026-09-11 15:37,success,33,656,8,6,0,2,0,3964146,3650000,2000000,21000000,28081,0.84,37.5,41.2,
+2026-09-11 22:09,success,33,713,1,0,0,0,0,3945140,3630000,2000000,21000000,28171,0.0,40.3,,
+2026-09-13 15:35,success,33,703,6,3,0,0,0,3938362,3630000,2000000,21000000,28154,0.42,39.7,32.0,
+2026-09-15 15:01,success,33,703,11,6,3,1,3.1,3949507,3650000,2000000,21000000,28118,0.85,39.2,43.0,
+2026-09-17 13:32,success,33,698,12,11,5,1,2.5,3948753,3650000,2000000,21000000,28037,1.56,39.7,38.4,
+2026-09-17 21:23,success,34,698,3,0,1,0,2.97,3909057,3650000,2000000,20000000,27954,0.0,39.4,,
+2026-09-21 14:09,error,,,,,,,,,,,,,,,,"BrowserType.launch_persistent_context: Target page, context or browser has been closed
+Browser logs:
+
+<launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+<launched> pid=14776
+Call log:
+  - <launching> C:\Program Files (x86)\Google\Chrome\Application\chrome.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --disable-blink-features=AutomationControlled --no-first-run --no-default-browser-check --user-data-dir=C:\Users\Ayelet Lironne\Yad2_Data\.yad2_chrome_profile --remote-debugging-pipe about:blank
+  - <launched> pid=14776
+  - [pid=14776] <gracefully close start>
+  - [pid=14776] <kill>
+  - [pid=14776] <will force kill>
+  - [pid=14776] taskkill stderr: ERROR: The process ""14776"" not found.
+  - [pid=14776] <process did exit: exitCode=21, signal=null>
+  - [pid=14776] starting temporary directories cleanup
+  - [pid=14776] finished temporary directories cleanup
+  - [pid=14776] <gracefully close end>
+"
+2026-09-21 14:16,error,,,,,,,,,,,,,,,,Could not obtain Radware clearance after repeated warm-ups; will retry.
+2026-09-23 07:52,success,35,721,16,13,4,0,2.06,3953545,3650000,2000000,21000000,28017,1.86,40.7,64.4,
+2026-09-23 09:16,success,33,718,0,0,0,0,0,3956354,3650000,2000000,21000000,28009,0.0,40.8,,
+2026-09-23 09:33,success,33,711,0,0,0,0,0,3963074,3650000,2000000,21000000,28014,0.0,40.4,,
+2026-09-25 07:28,success,17,370,15,33,4,1,2.95,3930539,3690000,2000000,12900000,27945,4.64,19.8,70.4,
+2026-09-30 15:01,success,34,737,57,34,8,0,3.37,3943210,3630000,2000000,21000000,27945,9.19,40.3,65.6,
+2026-10-04 16:51,success,34,724,19,11,14,1,2.9,3926581,3620000,2000000,21000000,27959,1.49,39.7,73.6,
+2026-10-06 21:22,success,18,643,30,26,6,1,2.48,3982375,3650000,2000000,21000000,27991,3.59,34.0,79.7,
+2026-10-06 22:02,success,18,664,5,0,0,0,0,3969901,3650000,2000000,21000000,28049,0.0,34.9,,
+2026-10-08 08:33,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 09:12,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 10:12,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 11:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 12:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 13:09,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 5 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 14:09,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 5 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-08 15:09,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 5 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 10:48,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 11:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 20 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 12:14,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 13:09,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 5 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 14:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 5 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 15:14,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 18:22,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-11 19:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-14 17:18,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-14 18:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-15 09:16,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-15 10:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-15 11:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-15 12:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-15 13:10,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-15 14:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-21 08:27,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-21 10:15,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-21 11:14,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 07:52,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 08:10,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 2 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 09:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 10:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 11:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 12:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 13:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 14:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-22 15:11,error,,,,,,,,,,,,,,,,[sale] Pagination stopped at page 19 (expected >= 25); likely bot-block. Refusing to save partial snapshot.
+2026-10-23 08:33,error,,,,,,,,,,,,,,,,"Page.query_selector_all: Execution context was destroyed, most likely because of a navigation"
+2026-10-23 08:54,success,18,750,154,49,52,2,7.21,3917483,3630000,1800000,12900000,28038,7.38,32.4,94.7,
+2026-10-23 11:52,success,18,751,3,0,0,0,0,3902103,3630000,1800000,12900000,28040,0.0,33.2,,
+2026-10-23 12:08,success,18,744,0,0,0,0,0,3920103,3640000,1800000,12900000,27983,0.0,32.7,,
