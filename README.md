@@ -79,6 +79,11 @@ streamlit run yad2_dashboard.py
 
 Opens at `http://localhost:8501`
 
+**Scan now and refresh:** double-click `סרוק ועדכן.bat`. It runs a full scrape
+(~10–15 min, Chrome windows open and close on their own), then opens the
+dashboard, which picks up the new data immediately. Safe to run at any time:
+if a scheduled scrape is already running, the lock makes this one exit.
+
 ---
 
 ## File Reference

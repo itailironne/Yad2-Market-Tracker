@@ -156,32 +156,31 @@ html, body, [class*="css"] {
 [data-testid="stSidebar"] { direction: rtl; }
 [data-testid="stSidebar"] * { text-align: right; }
 
-/* ── Sidebar: the dark product-chrome rail ────────────────
-   The system's cream-to-dark contrast is its pacing mechanism. On a single-view
-   dashboard there are no page bands to alternate, so the rail carries the dark
-   surface and the data canvas stays cream. */
+/* ── Sidebar: a light rail, one warm step deeper than the canvas ──
+   Was a near-black rail; it read as heavy and disconnected from the cream page.
+   Now the same warm family with dark ink, separated by a hairline. */
 [data-testid="stSidebar"] {
-    background: var(--surface-dark) !important;
-    border-left: none !important;
+    background: var(--surface-soft) !important;
+    border-left: 1px solid var(--hairline) !important;
     width: 260px !important; min-width: 260px !important;
 }
 [data-testid="stSidebar"] .stSelectbox label,
 [data-testid="stSidebar"] .stSlider label {
-    color: var(--on-dark-soft) !important;
+    color: var(--muted) !important;
     font-size: 12px !important; font-weight: 500 !important;
     text-transform: uppercase !important; letter-spacing: 1.5px !important;
 }
 [data-testid="stSidebar"] [data-baseweb="select"] > div {
-    background: var(--surface-dark-elevated) !important;
+    background: var(--surface-card) !important;
     border: 1px solid transparent !important;
     border-radius: var(--r-md) !important;
-    color: var(--on-dark) !important; font-size: 14px !important;
+    color: var(--ink) !important; font-size: 14px !important;
 }
-[data-testid="stSidebar"] [data-baseweb="select"] svg { fill: var(--on-dark-soft) !important; }
+[data-testid="stSidebar"] [data-baseweb="select"] svg { fill: var(--muted) !important; }
 
 .sidebar-brand {
     padding: var(--s-lg) 0 var(--s-lg);
-    border-bottom: 1px solid var(--surface-dark-elevated);
+    border-bottom: 1px solid var(--surface-card);
     margin-bottom: var(--s-lg);
 }
 /* Anthropic radial spike-mark, rendered flat — no gradient, no glow. */
@@ -198,42 +197,42 @@ html, body, [class*="css"] {
 }
 .sidebar-brand h3 {
     font-family: var(--font-display);
-    color: var(--on-dark); font-size: 22px; font-weight: 400;
+    color: var(--ink); font-size: 22px; font-weight: 400;
     text-align: center; margin: 0; letter-spacing: -0.3px;
 }
 .sidebar-brand p {
     font-family: var(--font-body);
-    color: var(--on-dark-soft); font-size: 13px; text-align: center;
+    color: var(--muted); font-size: 13px; text-align: center;
     margin: 4px 0 0; font-weight: 400;
 }
 
 .sidebar-status {
-    background: var(--surface-dark-elevated);
+    background: var(--surface-card);
     border: none; border-radius: var(--r-lg);
     padding: var(--s-md); margin-top: var(--s-md);
 }
 .sidebar-status .status-live {
     display: flex; align-items: center; gap: var(--s-xs);
-    color: var(--on-dark); font-size: 14px; font-weight: 500; margin-bottom: var(--s-xs);
+    color: var(--ink); font-size: 14px; font-weight: 500; margin-bottom: var(--s-xs);
 }
 .sidebar-status .live-dot {
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--success);
 }
 .sidebar-status .stat-row {
-    color: var(--on-dark-soft); font-size: 13px; margin-top: var(--s-xxs); font-weight: 400;
+    color: var(--muted); font-size: 13px; margin-top: var(--s-xxs); font-weight: 400;
 }
 .sidebar-status .delta-pills { display: flex; gap: var(--s-xxs); margin-top: var(--s-sm); flex-wrap: wrap; }
 .sidebar-status .dpill {
     font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: var(--r-pill);
-    background: var(--surface-dark-soft); color: var(--on-dark-soft);
+    background: var(--canvas); color: var(--muted);
 }
 .sidebar-status .dpill.green { color: var(--success); }
 .sidebar-status .dpill.red   { color: var(--error); }
 .sidebar-status .dpill.yel   { color: var(--accent-amber); }
 
 .nav-label {
-    color: var(--on-dark-soft); font-size: 12px; font-weight: 500;
+    color: var(--muted); font-size: 12px; font-weight: 500;
     text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: var(--s-xs);
 }
 
@@ -242,15 +241,22 @@ html, body, [class*="css"] {
 [data-testid="stSidebar"] [role="radiogroup"] > label {
     padding: 10px var(--s-sm) !important;
     border-radius: var(--r-md) !important;
-    color: var(--on-dark-soft) !important;
+    color: var(--muted) !important;
     font-size: 14px !important; font-weight: 500 !important;
     cursor: pointer;
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child { display: none !important; }
+/* The label text lives in a <p> that otherwise takes the theme's dark ink —
+   dark-on-dark, unreadable. Make it follow the label's colour. */
+[data-testid="stSidebar"] [role="radiogroup"] > label p,
+[data-testid="stSidebar"] [role="radiogroup"] > label div { color: inherit !important; }
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover { color: var(--ink) !important; }
 [data-testid="stSidebar"] [role="radiogroup"] > label[data-checked="true"],
 [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
-    background: var(--surface-dark-elevated) !important;
-    color: var(--on-dark) !important;
+    background: var(--surface-card) !important;
+    color: var(--ink) !important;
+    font-weight: 600 !important;
+    box-shadow: inset -3px 0 0 var(--primary);
 }
 
 /* Room-count toggle reuses the same radio, laid out horizontally */
@@ -293,13 +299,13 @@ html, body, [class*="css"] {
 .page-header .sub b { color: var(--body-strong); font-weight: 500; }
 
 /* ── KPI strip ───────────────────────────────────────── */
-.kpi-strip { display: flex; gap: var(--s-sm); flex-wrap: wrap; }
+.kpi-strip { display: flex; gap: var(--s-sm); flex-wrap: wrap; margin-bottom: var(--s-md); }
 .kpi {
-    flex: 1 1 180px; min-height: 132px;
+    flex: 1 1 180px; min-height: 0;
     background: var(--surface-card);
     border: none; border-radius: var(--r-lg);
-    padding: var(--s-lg);
-    display: flex; flex-direction: column; justify-content: space-between;
+    padding: var(--s-md) var(--s-lg);
+    display: flex; flex-direction: column; justify-content: flex-start;
 }
 .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-xs); }
 .kpi-label {
@@ -323,7 +329,7 @@ html, body, [class*="css"] {
    Copernicus, and these KPIs are the same editorial gesture. */
 .kpi-value {
     font-family: var(--font-display);
-    color: var(--ink); font-size: 36px; font-weight: 400;
+    color: var(--ink); font-size: 32px; font-weight: 400;
     line-height: 1.15; letter-spacing: -0.5px; margin-top: var(--s-xs);
 }
 .kpi-sub {
@@ -337,7 +343,8 @@ html, body, [class*="css"] {
 .kpi-delta.up   { color: var(--success); }
 .kpi-delta.down { color: var(--error); }
 .kpi-delta.flat { color: var(--muted-soft); }
-.kpi-spacer { flex: 1 1 180px; }
+/* Same height as a .kpi-delta line, so cards with and without a delta align. */
+.kpi-spacer { height: 18px; margin-top: var(--s-xs); flex: 0 0 auto; }
 
 /* ── Section labels ──────────────────────────────────── */
 .section-label {
@@ -378,6 +385,17 @@ html, body, [class*="css"] {
 }
 .card-desc::before { content: none; }
 .card > .card-desc + * { margin-top: var(--s-md); }
+
+/* A chart card's column IS the card: title, chart and notes in one box. */
+[data-testid="column"]:has(.card-title) {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    padding: var(--s-md) var(--s-lg) var(--s-sm);
+}
+[data-testid="column"]:has(.card-title) .card {
+    background: none; border: none; padding: 0; margin: 0;
+}
 
 /* ── Delta tiles ─────────────────────────────────────── */
 .delta-row { display: flex; gap: var(--s-sm); flex-wrap: wrap; }
@@ -1115,6 +1133,19 @@ if not os.path.exists(data_file_path):
     st.stop()
 
 # ── Load data ────────────────────────────────────────────────────────────────────
+# A finished scrape (scheduled, or the manual "סרוק ועדכן.bat") rewrites the
+# snapshots. Most loaders cache for 5 minutes, so drop every cached frame the
+# moment either snapshot changes — otherwise a fresh scan shows stale charts.
+@st.cache_resource
+def _data_version():
+    return {"stamp": None}
+
+_stamp = max(os.path.getmtime(deal_path("yad2_raanana_4rooms.json", d))
+             for d in ("sale", "rent") if os.path.exists(deal_path("yad2_raanana_4rooms.json", d)))
+if _data_version()["stamp"] != _stamp:
+    st.cache_data.clear()
+    _data_version()["stamp"] = _stamp
+
 _mtime    = os.path.getmtime(data_file_path)
 df        = load_current(_mtime, sel_deal)
 if len(df) == 0:
@@ -1831,7 +1862,7 @@ if page == "overview":
                     hovertemplate="<b>%{x}</b><br>+%{y} מודעות חדשות<extra></extra>",
                 ))
                 _chart(fig_new, 320)
-                fig_new.update_layout(yaxis_title="מודעות", bargap=0.3,
+                fig_new.update_layout(yaxis_title="מודעות", bargap=0.12,
                                       xaxis=_date_xaxis("%d/%m"), margin=dict(t=40))
                 new_event = st.plotly_chart(
                     fig_new, use_container_width=True,
@@ -1860,7 +1891,7 @@ if page == "overview":
                     hovertemplate="<b>%{x}</b><br>-%{y} מודעות הוסרו<extra></extra>",
                 ))
                 _chart(fig_rem, 320)
-                fig_rem.update_layout(yaxis_title="מודעות", bargap=0.3,
+                fig_rem.update_layout(yaxis_title="מודעות", bargap=0.12,
                                       xaxis=_date_xaxis("%d/%m"), margin=dict(t=40))
                 rem_event = st.plotly_chart(
                     fig_rem, use_container_width=True,
